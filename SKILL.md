@@ -180,6 +180,12 @@ cat > ~/.follow-builders/config.json << 'CFGEOF'
     "chatId": "<telegram chat ID, only if telegram>",
     "email": "<email address, only if email>"
   },
+  "cron": {
+    "mode": "<llm or raw>",
+    "agent": "codex",
+    "fallbackToRaw": false,
+    "codexSandbox": "workspace-write"
+  },
   "onboardingComplete": true
 }
 CFGEOF
@@ -262,15 +268,30 @@ Common errors and fixes:
 Do NOT proceed to the welcome digest step until the cron delivery has been verified.
 
 **Non-persistent agent + Telegram or Email delivery:**
-Use system crontab so it runs even when the terminal is closed:
+Use system crontab so it runs even when the terminal is closed. Prefer the LLM
+cron runner so the scheduled digest is remixed before delivery:
 ```bash
 SKILL_DIR="<absolute path to the skill directory>"
-(crontab -l 2>/dev/null; echo "<cron expression> cd $SKILL_DIR/scripts && node prepare-digest.js 2>/dev/null | node deliver.js 2>/dev/null") | crontab -
+cd "$SKILL_DIR/scripts" && npm install
+NODE_BIN="$(command -v node)"
+CODEX_BIN="$(command -v codex)"
+(crontab -l 2>/dev/null; echo "<cron expression> mkdir -p ~/.follow-builders/logs && cd \"$SKILL_DIR\" && FOLLOW_BUILDERS_CODEX_PATH=\"$CODEX_BIN\" \"$NODE_BIN\" scripts/run-llm-digest.js --agent codex >> ~/.follow-builders/logs/cron.log 2>&1") | crontab -
 ```
-Note: this runs the prepare script and pipes its output directly to delivery,
-bypassing the agent entirely. The digest won't be remixed by an LLM — it will
-deliver the raw JSON. For full remixed digests, the user should use /ai manually
-or switch to OpenClaw.
+
+This requires Codex to be installed, logged in, and available to cron. The runner
+uses `codex --ask-for-approval never exec` so scheduled jobs never block on
+interactive approval. If Codex cannot fetch the feeds under the default sandbox,
+set `"cron.codexSandbox": "danger-full-access"` or pass
+`--codex-sandbox danger-full-access` in the cron command. Only use that mode when
+the machine running cron is already trusted. If `codex` is unavailable, tell the
+user to install/login to Codex or use on-demand `/ai` until it is configured.
+
+Only use raw cron if the user explicitly asks for no LLM remix:
+```bash
+SKILL_DIR="<absolute path to the skill directory>"
+(crontab -l 2>/dev/null; echo "<cron expression> cd \"$SKILL_DIR/scripts\" && node prepare-digest.js 2>/dev/null | node deliver.js 2>/dev/null") | crontab -
+```
+Warn them that raw cron may deliver structured JSON instead of a readable digest.
 
 **Non-persistent agent + on-demand only (no Telegram/Email):**
 Skip cron setup entirely. Tell the user: "Since you chose on-demand delivery,
@@ -325,8 +346,9 @@ The script outputs a single JSON blob with everything you need:
 - `config` — user's language and delivery preferences
 - `podcasts` — podcast episodes with full transcripts
 - `x` — builders with their recent tweets (text, URLs, bios)
+- `blogs` — company blog posts with title, URL, and article content
 - `prompts` — the remix instructions to follow
-- `stats` — counts of episodes and tweets
+- `stats` — counts of episodes, tweets, and blog posts
 - `errors` — non-fatal issues (IGNORE these)
 
 If the script fails entirely (no JSON output), tell the user to check their
@@ -334,7 +356,8 @@ internet connection. Otherwise, use whatever content is in the JSON.
 
 ### Step 3: Check for content
 
-If `stats.podcastEpisodes` is 0 AND `stats.xBuilders` is 0, tell the user:
+If `stats.podcastEpisodes` is 0 AND `stats.xBuilders` is 0 AND `stats.blogPosts`
+is 0, tell the user:
 "No new updates from your builders today. Check back tomorrow!" Then stop.
 
 ### Step 4: Remix content
@@ -346,6 +369,7 @@ Read the prompts from the `prompts` field in the JSON:
 - `prompts.digest_intro` — overall framing rules
 - `prompts.summarize_podcast` — how to remix podcast transcripts
 - `prompts.summarize_tweets` — how to remix tweets
+- `prompts.summarize_blogs` — how to remix blog posts
 - `prompts.translate` — how to translate to Chinese
 
 **Tweets (process first):** The `x` array has builders with tweets. Process one at a time:
@@ -356,6 +380,10 @@ Read the prompts from the `prompts` field in the JSON:
 **Podcast (process second):** The `podcasts` array has at most 1 episode. If present:
 1. Summarize its `transcript` using `prompts.summarize_podcast`
 2. Use `name`, `title`, and `url` from the JSON object — NOT from the transcript
+
+**Blogs (process third):** The `blogs` array has company blog posts. If present:
+1. Summarize each post using `prompts.summarize_blogs`
+2. Use `name`, `title`, and `url` from the JSON object
 
 Assemble the digest following `prompts.digest_intro`.
 
@@ -372,7 +400,7 @@ Read `config.language` from the JSON:
 - **"zh":** Entire digest in Chinese. Follow `prompts.translate`.
 - **"bilingual":** Interleave English and Chinese **paragraph by paragraph**.
   For each builder's tweet summary: English version, then Chinese translation
-  directly below, then the next builder. For the podcast: English summary,
+  directly below, then the next builder. For podcasts and blogs: English summary,
   then Chinese translation directly below. Like this:
 
   ```

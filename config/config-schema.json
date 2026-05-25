@@ -56,6 +56,39 @@
         }
       }
     },
+    "cron": {
+      "type": "object",
+      "description": "How scheduled digest jobs run in non-persistent environments",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["raw", "llm"],
+          "default": "raw",
+          "description": "Cron mode: raw pipes prepare-digest.js to deliver.js, llm remixes through an agent before delivery"
+        },
+        "agent": {
+          "type": "string",
+          "enum": ["codex"],
+          "default": "codex",
+          "description": "Agent runtime for LLM cron mode. Only codex is supported"
+        },
+        "fallbackToRaw": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether LLM cron failures may fall back to raw delivery. The runner does not send raw output unless this is explicitly handled by a future mode"
+        },
+        "codexProfile": {
+          "type": "string",
+          "description": "Optional Codex config profile to use for LLM cron runs"
+        },
+        "codexSandbox": {
+          "type": "string",
+          "enum": ["workspace-write", "danger-full-access"],
+          "default": "workspace-write",
+          "description": "Codex sandbox mode for LLM cron runs. Use danger-full-access only when the default sandbox blocks network access for prepare-digest.js"
+        }
+      }
+    },
     "onboardingComplete": {
       "type": "boolean",
       "default": false,

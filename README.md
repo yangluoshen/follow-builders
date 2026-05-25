@@ -100,6 +100,26 @@ git clone https://github.com/zarazhangrui/follow-builders.git ~/.claude/skills/f
 cd ~/.claude/skills/follow-builders/scripts && npm install
 ```
 
+## Scheduled LLM Cron
+
+For non-persistent agents with Telegram or email delivery, use the LLM cron runner
+instead of piping raw feed JSON directly to delivery:
+
+```bash
+cd /path/to/follow-builders
+cd scripts && npm install && cd ..
+node scripts/run-llm-digest.js --agent codex
+```
+
+The runner invokes `codex --ask-for-approval never exec`, remixes the digest with
+the same prompts used by the interactive skill, writes logs to
+`~/.follow-builders/logs/`, and then delivers through `scripts/deliver.js`.
+Set `FOLLOW_BUILDERS_CODEX_PATH` in cron if `codex` is not on cron's PATH.
+If Codex's default sandbox blocks network access for `prepare-digest.js`, use
+`--codex-sandbox danger-full-access` only on a trusted machine.
+Raw cron delivery should only be used when explicitly configured because it may
+send structured JSON instead of a readable digest.
+
 ## Requirements
 
 - An AI agent (OpenClaw, Claude Code, or similar)
@@ -128,4 +148,3 @@ See [examples/sample-digest.md](examples/sample-digest.md) for what the output l
 ## License
 
 MIT
-
