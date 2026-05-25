@@ -93,6 +93,25 @@ git clone https://github.com/zarazhangrui/follow-builders.git ~/.claude/skills/f
 cd ~/.claude/skills/follow-builders/scripts && npm install
 ```
 
+## 定时 LLM Cron
+
+在非持久化 agent 中使用 Telegram 或邮件推送时，建议使用 LLM cron runner，
+不要把原始 feed JSON 直接管道给推送脚本：
+
+```bash
+cd /path/to/follow-builders
+cd scripts && npm install && cd ..
+node scripts/run-llm-digest.js --agent codex
+```
+
+runner 会调用 `codex --ask-for-approval never exec`，使用交互式 skill 相同的
+prompts 重新混编摘要，把日志写入 `~/.follow-builders/logs/`，然后通过
+`scripts/deliver.js` 推送。如果 cron 的 PATH 找不到 `codex`，请设置
+`FOLLOW_BUILDERS_CODEX_PATH`。如果 Codex 默认 sandbox 阻止
+`prepare-digest.js` 访问网络，可以在可信机器上使用
+`--codex-sandbox danger-full-access`。只有在明确配置 raw 模式时才应使用
+原始 cron 推送，因为它可能发送结构化 JSON，而不是可读摘要。
+
 ## 系统要求
 
 - 一个 AI agent（OpenClaw、Claude Code 或类似工具）
