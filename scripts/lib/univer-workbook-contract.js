@@ -119,6 +119,11 @@ function requireContentIdForSource(item, index) {
   }
 }
 
+function requireDateOnly(value, label) {
+  requireString(value, label);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${label} must be YYYY-MM-DD`);
+}
+
 export function validateItemsPayload(payload) {
   if (!payload || typeof payload !== 'object') throw new Error('items payload must be an object');
   if (!Array.isArray(payload.items)) throw new Error('items payload must include items array');
@@ -127,6 +132,7 @@ export function validateItemsPayload(payload) {
     requireString(item.sourceType, `items[${index}].sourceType`);
     requireString(item.title, `items[${index}].title`);
     requireString(item.url, `items[${index}].url`);
+    requireDateOnly(item.runDate, `items[${index}].runDate`);
     if (!['x', 'podcast', 'blog'].includes(item.sourceType)) {
       throw new Error(`items[${index}].sourceType must be x, podcast, or blog`);
     }

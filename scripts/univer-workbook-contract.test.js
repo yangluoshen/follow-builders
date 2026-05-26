@@ -106,9 +106,29 @@ test('validateItemsPayload rejects malformed payloads', () => {
       contentId: 'tweet-1',
       sourceType: 'x',
       title: 'bad id',
-      url: 'https://x.com/a/status/1'
+      url: 'https://x.com/a/status/1',
+      runDate: '2026-05-26'
     }] }),
     /items\[0\]\.contentId must start with x:/
+  );
+  assert.throws(
+    () => validateItemsPayload({ items: [{
+      contentId: 'x:1',
+      sourceType: 'x',
+      title: 'missing runDate',
+      url: 'https://x.com/a/status/1'
+    }] }),
+    /items\[0\]\.runDate is required/
+  );
+  assert.throws(
+    () => validateItemsPayload({ items: [{
+      contentId: 'x:1',
+      sourceType: 'x',
+      title: 'bad runDate',
+      url: 'https://x.com/a/status/1',
+      runDate: '2026-5-6'
+    }] }),
+    /items\[0\]\.runDate must be YYYY-MM-DD/
   );
   assert.doesNotThrow(() => validateItemsPayload({
     runId: 'run-1',
