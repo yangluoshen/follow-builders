@@ -129,9 +129,20 @@ digest. Markdown remains the Telegram-friendly primary output, while the
 workbook keeps long-lived history for review.
 
 The local workbook lives at `~/.follow-builders/follow-builders.univer` and uses
-`raw-data`, `runs`, and weekly review sheets. Setup copies
-`templates/follow-builders.univer`, runs `univer sync`, and stores the public URL
-`https://univer.ai/space/sheets/<unit-id>` in the local config.
+`raw-data`, `runs`, and weekly review sheets. Workbook history requires
+`univer-cli` (`univer`) to be installed and authenticated. Normal install does
+not sync a workbook; initialize it from the repo with:
+
+```bash
+node scripts/init-univer-workbook.js
+```
+
+Initialization copies `templates/follow-builders.univer`, runs `univer sync`,
+and stores the public URL `https://univer.ai/space/sheets/<unit-id>` in the
+local config.
+
+Do not edit `.univer` package internals and do not sync the repo template.
+Initialization copies and syncs the user workbook instead.
 
 Daily runs update the local workbook and sync it. If the workbook update or sync
 fails, Markdown delivery continues.

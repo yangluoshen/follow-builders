@@ -238,18 +238,20 @@ writeFileSync(finalMessagePath, 'Digest prepared.');
   assert.match(log, /workbookUpdateError=.*items\[0\]\.contentId is required/s);
 });
 
-test('configured workbook updater is invoked and does not block markdown delivery on failure', async t => {
+test('configured workbook updater failure with public URL logs stale warning and does not block markdown delivery', async t => {
   const home = await makeTempHome();
   t.after(() => rm(home, { recursive: true, force: true }));
   const fakeCodex = join(home, 'fake-codex.js');
   const fakeUpdater = join(home, 'fake-updater.js');
   const updaterCalls = join(home, 'updater-calls.txt');
+  const publicUrl = 'https://univer.ai/space/sheets/unit-test-1';
 
   await writeConfig(home, {
     delivery: { method: 'stdout' },
     univer: {
       enabled: true,
-      workbookPath: join(home, '.follow-builders', 'follow-builders.univer')
+      workbookPath: join(home, '.follow-builders', 'follow-builders.univer'),
+      publicUrl
     }
   });
 
@@ -297,8 +299,11 @@ process.exit(9);
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Digest survives failing configured updater/);
+  assert.match(result.stdout, new RegExp(`Univer workbook: ${publicUrl}`));
   const calls = await readFile(updaterCalls, 'utf-8');
   assert.match(calls, /--items-json .* --markdown-path /);
+  const log = await readRunLog(home);
+  assert.match(log, /workbookUpdateWarning=remote workbook may not include latest data; appended public URL may be stale/);
 });
 
 test('public workbook URL is appended before non-stdout delivery', async t => {

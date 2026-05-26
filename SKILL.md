@@ -197,6 +197,21 @@ cat > ~/.follow-builders/config.json << 'CFGEOF'
 CFGEOF
 ```
 
+The empty `univer.unitId` and `univer.publicUrl` values are pre-init
+placeholders. Workbook history is not active until initialization succeeds.
+
+Initialize the user workbook before cron verification:
+```bash
+cd ${CLAUDE_SKILL_DIR}/scripts && node init-univer-workbook.js
+```
+
+This copies `templates/follow-builders.univer` to
+`~/.follow-builders/follow-builders.univer`, runs `univer sync`, and updates
+`univer.unitId` / `univer.publicUrl` in `~/.follow-builders/config.json`.
+If the `univer` CLI, login, or sync is unavailable, set `univer.enabled` to
+`false` for now and continue Markdown setup. Tell the user workbook history is
+inactive until they install/login to `univer` and rerun the init command.
+
 Then set up the scheduled job based on platform AND delivery method:
 
 **OpenClaw:**
@@ -235,7 +250,7 @@ openclaw cron add \
   --cron "<cron expression>" \
   --tz "<user IANA timezone>" \
   --session isolated \
-  --message "Run the follow-builders skill: execute prepare-digest.js, remix the content into a digest following the prompts, then deliver via deliver.js" \
+  --message "Run the follow-builders skill: execute prepare-digest.js, remix the source material into Markdown, build workbook items JSON, update and sync the Univer workbook when config.univer is initialized/enabled, append config.univer.publicUrl if present, then deliver the Markdown." \
   --announce \
   --channel <channel name> \
   --to "<target ID>" \
@@ -482,19 +497,38 @@ Read `config.language` from the JSON:
 
 **Follow this setting exactly. Do NOT mix languages.**
 
-### Step 6: Deliver
+### Step 6: Update Univer workbook if initialized
+
+Before delivery, build the structured workbook items JSON from the same source
+material used for the Markdown digest. Follow the workbook contract above; do
+not duplicate or invent items that are not in the digest source material.
+
+Save the final Markdown to a file such as `/tmp/fb-digest.txt` and the workbook
+items JSON to a file such as `/tmp/fb-workbook-items.json`. If
+`config.univer.enabled !== false`, `config.univer.workbookPath` exists, and
+`config.univer.unitId` or `config.univer.publicUrl` is present, run:
+
+```bash
+cd ${CLAUDE_SKILL_DIR}/scripts && node update-univer-workbook.js --items-json /tmp/fb-workbook-items.json --markdown-path /tmp/fb-digest.txt
+```
+
+Workbook update or sync failures are non-blocking. Keep delivering Markdown. If
+`config.univer.publicUrl` exists, append `Univer workbook: <publicUrl>` to the
+Markdown before delivery; when the workbook update failed, mention in logs that
+the remote workbook may not include the latest data.
+
+### Step 7: Deliver
 
 Read `config.delivery.method` from the JSON:
 
 **If "telegram" or "email":**
 ```bash
-echo '<your digest text>' > /tmp/fb-digest.txt
 cd ${CLAUDE_SKILL_DIR}/scripts && node deliver.js --file /tmp/fb-digest.txt 2>/dev/null
 ```
 If delivery fails, show the digest in the terminal as fallback.
 
 **If "stdout" (default):**
-Just output the digest directly.
+Output the contents of `/tmp/fb-digest.txt` directly.
 
 ---
 

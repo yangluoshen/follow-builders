@@ -623,9 +623,15 @@ async function main() {
     });
     await assertDigestFile(digestPath);
     await assertFinalMessage(finalMessagePath, { config, logPath });
-    await runWorkbookSideEffects({ config, digestPath, itemsJsonPath, logPath }).catch(err =>
-      appendFile(logPath, `workbookUpdateError=${redact(err.stack || err.message, config)}\n`, 'utf-8')
-    );
+    await runWorkbookSideEffects({ config, digestPath, itemsJsonPath, logPath }).catch(async err => {
+      const lines = [
+        `workbookUpdateError=${redact(err.stack || err.message, config)}`
+      ];
+      if (config.univer?.publicUrl) {
+        lines.push('workbookUpdateWarning=remote workbook may not include latest data; appended public URL may be stale');
+      }
+      await appendFile(logPath, `${lines.join('\n')}\n`, 'utf-8');
+    });
 
     if (config.univer?.publicUrl) {
       const digest = await readFile(digestPath, 'utf-8');
