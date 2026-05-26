@@ -51,6 +51,9 @@
   const SHEET_NAMES = ['raw-data', 'runs', '_week-template'];
   const WEEK_HEADER_ROW = 14;
   const WEEK_DATA_START_ROW = WEEK_HEADER_ROW + 1;
+  const COLORS = {
+    title: '#102033', titleSoft: '#1E3A5F', x: '#2563EB', podcast: '#7C3AED', blog: '#F59E0B', green: '#16A34A', greenSoft: '#DCFCE7', yellowSoft: '#FEF3C7', redSoft: '#FEE2E2', sheet: '#F6F8FB', card: '#FFFFFF', border: '#E2E8F0', text: '#111827', muted: '#64748B', tableHeader: '#1F4E79', tableAlt: '#F8FBFF'
+  };
 
   function ensureSheet(workbook, name, rows, columns) {
     return workbook.getSheetByName(name) || workbook.create(name, rows, columns);
@@ -93,39 +96,65 @@
 
     sheet.getRange('A1:J1').merge({ isForceMerge: true });
     sheet.getRange('A1').setValue('Follow Builders Weekly Digest');
-    sheet
-      .getRange('A1:J1')
-      .setFontWeight('bold')
-      .setFontSize(18)
-      .setFontColor('#0F172A')
-      .setBackgroundColor('#EAF2F8')
-      .setVerticalAlignment('middle');
+    sheet.getRange('A1:J1').setBackgroundColor(COLORS.title).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(22).setVerticalAlignment('middle');
 
-    sheet.getRange('A3:B10').setValues([
-      ['Week', ''],
-      ['Generated at', ''],
-      ['Items in update', ''],
-      ['Inserted raw rows', ''],
-      ['Updated raw rows', ''],
-      ['Public URL', ''],
-      ['Run ID', ''],
-      ['Source order', 'X, Podcast, Blog']
-    ]);
-    sheet
-      .getRange('A3:B10')
-      .setBackgroundColor('#F8FAFC')
-      .setVerticalAlignment('middle');
-    sheet.getRange('A3:A10').setFontWeight('bold').setFontColor('#334155');
+    sheet.getRange('A2:J2').merge({ isForceMerge: true }).setValue('Week range · Generated timestamp · Public workbook URL');
+    sheet.getRange('A2:J2').setBackgroundColor('#EAF2F8').setFontColor(COLORS.text).setVerticalAlignment('middle');
+
+    sheet.getRange('A3').setValue('Items');
+    sheet.getRange('C3').setValue('X');
+    sheet.getRange('E3').setValue('Podcast');
+    sheet.getRange('G3').setValue('Blog');
+    sheet.getRange('I3').setValue('Avg Score');
+
+    sheet.getRange('A4:B5').merge({ isForceMerge: true }).setValue('0');
+    sheet.getRange('C4:D5').merge({ isForceMerge: true }).setValue('0');
+    sheet.getRange('E4:F5').merge({ isForceMerge: true }).setValue('0');
+    sheet.getRange('G4:H5').merge({ isForceMerge: true }).setValue('0');
+    sheet.getRange('I4:J5').merge({ isForceMerge: true }).setValue('-');
+    [
+      ['A4:B5', COLORS.titleSoft],
+      ['C4:D5', COLORS.x],
+      ['E4:F5', COLORS.podcast],
+      ['G4:H5', COLORS.blog],
+      ['I4:J5', COLORS.green]
+    ].forEach(([a1, color]) => {
+      sheet.getRange(a1).setBackgroundColor(color).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(18).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    });
+
+    sheet.getRange('A7:C7').merge({ isForceMerge: true }).setValue('Top X');
+    sheet.getRange('D7:F7').merge({ isForceMerge: true }).setValue('Top Podcast');
+    sheet.getRange('G7:J7').merge({ isForceMerge: true }).setValue('Highest Score');
+    sheet.getRange('A8:C10').merge({ isForceMerge: true }).setValue('Highlight content appears here');
+    sheet.getRange('D8:F10').merge({ isForceMerge: true }).setValue('Highlight content appears here');
+    sheet.getRange('G8:J10').merge({ isForceMerge: true }).setValue('Highlight content appears here');
+    sheet.getRange('A7:J10').setBackgroundColor(COLORS.card).setFontColor(COLORS.text).setVerticalAlignment('top').setWrap(true);
+    sheet.getRange('A7').setFontColor(COLORS.x).setFontWeight('bold');
+    sheet.getRange('D7').setFontColor(COLORS.podcast).setFontWeight('bold');
+    sheet.getRange('G7').setFontColor(COLORS.green).setFontWeight('bold');
+
+    sheet.getRange('A12:J13').merge({ isForceMerge: true }).setValue('Daily Digest');
+    sheet.getRange('A12:J13').setBackgroundColor(COLORS.sheet).setFontColor(COLORS.text).setFontWeight('bold').setFontSize(16).setVerticalAlignment('middle');
 
     sheet.getRange(WEEK_HEADER_ROW, 0, 1, WEEK_DISPLAY_HEADERS.length).setValues([WEEK_DISPLAY_HEADERS]);
-    styleHeader(sheet.getRange(WEEK_HEADER_ROW, 0, 1, WEEK_DISPLAY_HEADERS.length), '#1F4E79');
+    styleHeader(sheet.getRange(WEEK_HEADER_ROW, 0, 1, WEEK_DISPLAY_HEADERS.length), COLORS.tableHeader);
 
-    const widths = [110, 90, 160, 280, 360, 320, 180, 80, 300, 180];
+    const widths = [104, 88, 150, 300, 430, 360, 170, 86, 330, 190];
     widths.forEach((width, index) => sheet.setColumnWidth(index, width));
-    sheet.setRowHeight(0, 36);
-    sheet.setRowHeight(WEEK_HEADER_ROW, 30);
-    sheet.setRowHeights(WEEK_DATA_START_ROW, 80, 76);
-    sheet.getRange(WEEK_DATA_START_ROW, 0, 80, WEEK_DISPLAY_HEADERS.length).setVerticalAlignment('top');
+    sheet.setRowHeight(0, 34);
+    sheet.setRowHeight(1, 28);
+    sheet.setRowHeight(2, 26);
+    sheet.setRowHeight(3, 44);
+    sheet.setRowHeight(4, 44);
+    sheet.setRowHeight(6, 24);
+    sheet.setRowHeight(7, 34);
+    sheet.setRowHeight(8, 46);
+    sheet.setRowHeight(9, 46);
+    sheet.setRowHeight(11, 30);
+    sheet.setRowHeight(12, 30);
+    sheet.setRowHeight(WEEK_HEADER_ROW, 32);
+    sheet.setRowHeights(WEEK_DATA_START_ROW, 80, 96);
+    sheet.getRange(WEEK_DATA_START_ROW, 0, 80, WEEK_DISPLAY_HEADERS.length).setVerticalAlignment('top').setWrap(true);
 
     const scoreRange = sheet.getRange('H16:H200');
     const rule = sheet
