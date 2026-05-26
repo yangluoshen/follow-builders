@@ -1,381 +1,35 @@
 {
-  "generatedAt": "2026-05-26T14:59:18.230Z",
+  "generatedAt": "2026-05-26T15:09:35.663Z",
   "lookbackHours": 72,
   "discovery": [
     {
       "source": "discovery",
       "sourceKind": "hn",
-      "sourceName": "HN Top Stories",
-      "title": "Using AI to write better code more slowly",
-      "url": "https://nolanlawson.com/2026/05/25/using-ai-to-write-better-code-more-slowly",
-      "publishedAt": "2026-05-25T23:16:59.000Z",
-      "author": "signa11",
-      "summary": "Using AI to write better code more slowly",
-      "metadata": {
-        "score": 904,
-        "comments": 339,
-        "rank": 3,
-        "tags": []
-      },
-      "rawSourceKey": "hn:48272984"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
-      "sourceName": "HN Top Stories",
-      "title": "Norway's 2 petabytes of Huawei flash storage and LLM training",
-      "url": "https://www.blocksandfiles.com/flash/2026/05/22/norways-2-petabytes-of-huawei-flash-storage-and-llm-training/5244910",
-      "publishedAt": "2026-05-25T19:37:57.000Z",
-      "author": "rbanffy",
-      "summary": "Norway's 2 petabytes of Huawei flash storage and LLM training",
-      "metadata": {
-        "score": 304,
-        "comments": 195,
-        "rank": 30,
-        "tags": [
-          "llm"
-        ]
-      },
-      "rawSourceKey": "hn:48270770"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
-      "sourceName": "HN Top Stories",
-      "title": "Uber president says AI spending is getting 'harder to justify'",
-      "url": "https://www.theverge.com/transportation/937116/uber-ai-investment-hard-to-justify",
-      "publishedAt": "2026-05-26T10:01:39.000Z",
-      "author": "berlianta",
-      "summary": "Uber president says AI spending is getting 'harder to justify'",
-      "metadata": {
-        "score": 85,
-        "comments": 19,
-        "rank": 22,
-        "tags": []
-      },
-      "rawSourceKey": "hn:48277485"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
-      "sourceName": "HN Algolia LLM",
-      "title": "A 400-hour forensic audit of LLMs using multi-model context saturation",
-      "url": "https://github.com/alanscalone/llm-behavior-analysis",
-      "publishedAt": "2026-05-26T14:39:06.000Z",
-      "author": "AlanScalone",
-      "summary": "A 400-hour forensic audit of LLMs using multi-model context saturation",
-      "metadata": {
-        "score": 3,
-        "comments": 0,
-        "rank": 0,
-        "tags": [
-          "llm"
-        ]
-      },
-      "rawSourceKey": "hn:48280493"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
       "sourceName": "HN Algolia AI",
-      "title": "AI System Automates Coding for Scientific Research",
-      "url": "https://seas.harvard.edu/news/ai-system-automates-coding-scientific-research",
-      "publishedAt": "2026-05-26T14:49:19.000Z",
-      "author": "geox",
-      "summary": "AI System Automates Coding for Scientific Research",
-      "metadata": {
-        "score": 2,
-        "comments": 0,
-        "rank": 0,
-        "tags": []
-      },
-      "rawSourceKey": "hn:48280631"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
-      "sourceName": "HN Algolia AI",
-      "title": "Laptop AI – local AI memory for your files",
-      "url": "https://github.com/takshd15/Laptop-AI",
-      "publishedAt": "2026-05-26T14:47:03.000Z",
-      "author": "takshdange",
-      "summary": "Laptop AI – local AI memory for your files",
-      "metadata": {
-        "score": 2,
-        "comments": 0,
-        "rank": 0,
-        "tags": []
-      },
-      "rawSourceKey": "hn:48280596"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
-      "sourceName": "HN Algolia LLM",
-      "title": "LLM Driven AutoForecasting with Sktime's `Craft()`",
-      "url": "https://pub.towardsai.net/llm-driven-autoforecasting-with-sktimes-craft-0355f5c720e8",
-      "publishedAt": "2026-05-26T14:32:54.000Z",
-      "author": "528491",
-      "summary": "LLM Driven AutoForecasting with Sktime's `Craft()`",
-      "metadata": {
-        "score": 2,
-        "comments": 0,
-        "rank": 0,
-        "tags": [
-          "llm"
-        ]
-      },
-      "rawSourceKey": "hn:48280402"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
-      "sourceName": "HN Algolia LLM",
-      "title": "Critical Views on LLMs and Health Advice: An Academic Reading List",
-      "url": "https://read.misalignedmag.com/critical-views-on-llms-and-health-advice-an-academic-reading-list-9cbecbff83f5",
-      "publishedAt": "2026-05-26T14:07:26.000Z",
-      "author": "lcubw",
-      "summary": "Critical Views on LLMs and Health Advice: An Academic Reading List",
-      "metadata": {
-        "score": 2,
-        "comments": 0,
-        "rank": 0,
-        "tags": [
-          "llm"
-        ]
-      },
-      "rawSourceKey": "hn:48280091"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "hn",
-      "sourceName": "HN Algolia AI",
-      "title": "GrillKit – self-hosted AI technical interview trainer",
-      "url": "https://github.com/GrillKit/grillkit",
-      "publishedAt": "2026-05-26T14:56:03.000Z",
-      "author": "vitchenkokir",
-      "summary": "GrillKit – self-hosted AI technical interview trainer",
+      "title": "MCP: Security Design Considerations for AI-Driven Automation by NSA [pdf]",
+      "url": "https://www.nsa.gov/Portals/75/documents/Cybersecurity/CSI_MCP_SECURITY.pdf",
+      "publishedAt": "2026-05-26T15:04:10.000Z",
+      "author": "myworkaccount2",
+      "summary": "MCP: Security Design Considerations for AI-Driven Automation by NSA [pdf]",
       "metadata": {
         "score": 1,
         "comments": 0,
         "rank": 0,
-        "tags": []
-      },
-      "rawSourceKey": "hn:48280712"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "official",
-      "sourceName": "OpenAI News",
-      "title": "OpenAI, Grupo Folha and Grupo UOL announce strategic content partnership",
-      "url": "https://openai.com/index/grupo-folha-grupo-uol-partnership",
-      "publishedAt": "2026-05-25T00:00:00.000Z",
-      "author": "",
-      "summary": "OpenAI partners with Grupo Folha and Grupo UOL to bring trusted Brazilian journalism to ChatGPT, expanding access to news with attribution and transparency.",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 0,
         "tags": [
-          "llm"
+          "mcp"
         ]
       },
-      "rawSourceKey": "https://openai.com/index/grupo-folha-grupo-uol-partnership"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "official",
-      "sourceName": "Hugging Face Blog",
-      "title": "Harness, Scaffold, and the AI Agent Terms Worth Getting Right",
-      "url": "https://huggingface.co/blog/agent-glossary",
-      "publishedAt": "2026-05-25T00:00:00.000Z",
-      "author": "",
-      "summary": "",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 0,
-        "tags": [
-          "agent"
-        ]
-      },
-      "rawSourceKey": "https://huggingface.co/blog/agent-glossary"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "official",
-      "sourceName": "Anthropic API Release Notes",
-      "title": "Claude Platform",
-      "url": "https://docs.anthropic.com/en/release-notes/api",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "Anthropic",
-      "summary": "Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Loading... Solutions AI agents Code modernization Coding Customer support Education Financial services Government Life sciences Partners Amazon Bedrock Google Cloud&#x27;s Vertex AI Learn Blog Courses Use cases Connectors Customer stories Engineering at Anthropic Events Powered by Claude Service partners Startups program Company Anthropic Careers Economic Futures Research News Responsible Scaling Policy Security and compliance Transparency Learn Blog Courses Use cases Connectors Customer stories Engineering at Anthropic Events Po",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 0,
-        "tags": [
-          "agent",
-          "llm"
-        ]
-      },
-      "rawSourceKey": "https://docs.anthropic.com/en/release-notes/api#9c61177caecf"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "official",
-      "sourceName": "Anthropic Claude Code Release Notes",
-      "title": "Search code, repositories, users, issues, pull requests...",
-      "url": "https://docs.anthropic.com/en/release-notes/claude-code",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "Anthropic",
-      "summary": "anthropics / claude-code Public Notifications You must be signed in to change notification settings Fork 20.8k Star 127k Code Issues 5k+ Pull requests 590 Actions Security and quality 27 Insights Additional navigation options Code Issues Pull requests Actions Security and quality Insights Files Expand file tree main Breadcrumbs claude-code / CHANGELOG.md Copy path Blame More file actions Blame More file actions Latest commit History History History 3946 lines (3354 loc) · 319 KB main Breadcrumbs claude-code / CHANGELOG.md Top File metadata and controls Preview Code Blame 3946 lines (3354 loc) · 319 KB Raw Copy raw file Download raw file Outline Edit and raw actions",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 0,
-        "tags": [
-          "llm"
-        ]
-      },
-      "rawSourceKey": "https://docs.anthropic.com/en/release-notes/claude-code#224abd36a345"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "official",
-      "sourceName": "Anthropic Claude Apps Release Notes",
-      "title": "Release notes",
-      "url": "https://docs.anthropic.com/en/release-notes/claude-apps",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "Anthropic",
-      "summary": "API Docs Release Notes How to Get Support English Français Deutsch Bahasa Indonesia Italiano 日本語 한국어 Português Pусский 简体中文 Español 繁體中文 English API Docs Release Notes How to Get Support English Français Deutsch Bahasa Indonesia Italiano 日本語 한국어 Português Pусский 简体中文 Español 繁體中文 English Search for articles... All Collections Claude Release notes Release notes Updated this week Table of contents May 2026 May 21, 2026 Claude now works with more security and compliance tools We introduced Claude Compliance API integrations with notable security and compliance tools. Now IT and security teams can govern Claude across our platform and suite of products, the same way they govern other applicatio",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 0,
-        "tags": [
-          "llm"
-        ]
-      },
-      "rawSourceKey": "https://docs.anthropic.com/en/release-notes/claude-apps#a7d41fa4ab37"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "github_trending",
-      "sourceName": "GitHub Trending Daily",
-      "title": "Lum1104/Understand-Anything",
-      "url": "https://github.com/Lum1104/Understand-Anything",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "Lum1104",
-      "summary": "Star Lum1104 / Understand-Anything Graphs that teach > graphs that impress. Turn any code into an interactive knowledge graph you can explore, search, and ask questions about. Works with Claude Code, Codex, Cursor, Copilot, Gemini CLI, and more.",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 1,
-        "tags": [
-          "llm",
-          "developer-tools"
-        ],
-        "language": "TypeScript",
-        "stars": 34447
-      },
-      "rawSourceKey": "github:lum1104/understand-anything"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "github_trending",
-      "sourceName": "GitHub Trending Daily",
-      "title": "affaan-m/ECC",
-      "url": "https://github.com/affaan-m/ECC",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "affaan-m",
-      "summary": "Sponsor Star affaan-m / ECC The agent harness performance optimization system. Skills, instincts, memory, security, and research-first development for Claude Code, Codex, Opencode, Cursor and beyond.",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 2,
-        "tags": [
-          "agent",
-          "llm",
-          "developer-tools"
-        ],
-        "language": "JavaScript",
-        "stars": 193718
-      },
-      "rawSourceKey": "github:affaan-m/ecc"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "github_trending",
-      "sourceName": "GitHub Trending Daily",
-      "title": "rohitg00/ai-engineering-from-scratch",
-      "url": "https://github.com/rohitg00/ai-engineering-from-scratch",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "rohitg00",
-      "summary": "Sponsor Star rohitg00 / ai-engineering-from-scratch Learn it. Build it. Ship it for others.",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 3,
-        "tags": [],
-        "language": "Python",
-        "stars": 20159
-      },
-      "rawSourceKey": "github:rohitg00/ai-engineering-from-scratch"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "github_trending",
-      "sourceName": "GitHub Trending Daily",
-      "title": "anthropics/knowledge-work-plugins",
-      "url": "https://github.com/anthropics/knowledge-work-plugins",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "anthropics",
-      "summary": "Star anthropics / knowledge-work-plugins Open source repository of plugins primarily intended for knowledge workers to use in Claude Cowork",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 4,
-        "tags": [
-          "llm"
-        ],
-        "language": "Python",
-        "stars": 16408
-      },
-      "rawSourceKey": "github:anthropics/knowledge-work-plugins"
-    },
-    {
-      "source": "discovery",
-      "sourceKind": "github_trending",
-      "sourceName": "GitHub Trending Daily",
-      "title": "mukul975/Anthropic-Cybersecurity-Skills",
-      "url": "https://github.com/mukul975/Anthropic-Cybersecurity-Skills",
-      "publishedAt": "2026-05-26T14:58:41.879Z",
-      "author": "mukul975",
-      "summary": "Sponsor Star mukul975 / Anthropic-Cybersecurity-Skills 754 structured cybersecurity skills for AI agents · Mapped to 5 frameworks: MITRE ATT&CK, NIST CSF 2.0, MITRE ATLAS, D3FEND & NIST AI RMF · agentskills.io standard · Works with Claude Code, GitHub Copilot, Codex CLI, Cursor, Gemini CLI & 20+ platforms · 26 security domains · Apache 2.0",
-      "metadata": {
-        "score": 0,
-        "comments": 0,
-        "rank": 5,
-        "tags": [
-          "agent",
-          "llm",
-          "developer-tools"
-        ],
-        "language": "Python",
-        "stars": 9798
-      },
-      "rawSourceKey": "github:mukul975/anthropic-cybersecurity-skills"
+      "rawSourceKey": "hn:48280824"
     },
     {
       "source": "discovery",
       "sourceKind": "reddit",
       "sourceName": "r/AI_Agents",
-      "title": "Everybody seems to talk about coding AI agents. But what are some other genius AI agents you have come across?",
-      "url": "https://www.reddit.com/r/AI_Agents/comments/1tn1zxz/everybody_seems_to_talk_about_coding_ai_agents",
-      "publishedAt": "2026-05-25T07:38:57.000Z",
-      "author": "/u/impetuouschestnut",
-      "summary": "Feels like every AI conversation right now eventually turns into \"AI coding agents\" autonomous dev tools, or replacing software engineers. Which is cool, but it also feels like the entire internet is converging on the exact same use case. Meanwhile, I’m convinced there are probably insanely clever AI agents being built quietly in industries most people aren’t even paying attention to yet. I’m especially interested in agents that don’t just generate text or code, but actually remove annoying real-world friction, automate weird workflows, uncover hidden opportunities, or solve problems that normally require a ton of human coordination and context. The kind of stuff where you hear it and instantly think, \"Why didn’t this exist earlier?\" So curious, everybody seems to talk about coding AI agents, but what are some other genius AI agents you have come across? &#32; submitted by &#32; /u/impetuouschestnut [link] &#32; [comments]",
+      "title": "A solo founder just raised $30M Series A and let AI agents run the fun",
+      "url": "https://www.reddit.com/r/AI_Agents/comments/1tm5n18/a_solo_founder_just_raised_30m_series_a_and_let",
+      "publishedAt": "2026-05-24T07:49:03.000Z",
+      "author": "/u/schneida_vie",
+      "summary": "Polsia just closed $30M Series A at a $250M post-money valuation. One founder, Ben Cera. Zero employees. ~$10M ARR five months after launch, 7,600 companies on the platform, 3,627 DAU, 85% month-two retention. It is now the highest valuation any truly solo company has ever crossed. Every post about this is going to lead with the 'AI agents run everything' angle. That part is real (the agents literally ran his fundraise outreach, diligence, scheduling, and data room, he only joined for term sheet signature calls), but it is also the part you can already infer from the product name. Anyone tried it so far more exentsively? &#32; submitted by &#32; /u/schneida_vie [link] &#32; [comments]",
       "metadata": {
         "score": 0,
         "comments": 0,
@@ -384,10 +38,122 @@
           "agent"
         ]
       },
-      "rawSourceKey": "t3_1tn1zxz"
+      "rawSourceKey": "t3_1tm5n18"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "reddit",
+      "sourceName": "r/AI_Agents",
+      "title": "what AI tools are actually part of your daily workflow?",
+      "url": "https://www.reddit.com/r/AI_Agents/comments/1tmlkve/what_ai_tools_are_actually_part_of_your_daily",
+      "publishedAt": "2026-05-24T19:22:22.000Z",
+      "author": "/u/Elpepestan",
+      "summary": "there’s so much AI hype right now that it’s getting hard to tell which tools people genuinely use long term vs which ones just look good on twitter for a week. curious what tools have actually stuck in your workflow and consistently saved you time or helped you produce better work. not really looking for “top 10 AI tools” lists, more interested in tools you keep coming back to every day because they’re genuinely useful. &#32; submitted by &#32; /u/Elpepestan [link] &#32; [comments]",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "agent"
+        ]
+      },
+      "rawSourceKey": "t3_1tmlkve"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt AI Featured",
+      "title": "Parrot Speech-to-text API",
+      "url": "https://www.producthunt.com/products/parrot-speech-to-text-api",
+      "publishedAt": "2026-05-25T19:49:34.000Z",
+      "author": "Parth Chadha",
+      "summary": "Fast, accurate STT for production-grade voice agents Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "agent"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1155711"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt AI Featured",
+      "title": "MiniCPM5-1B",
+      "url": "https://www.producthunt.com/products/minicpm-4-0",
+      "publishedAt": "2026-05-26T03:07:00.000Z",
+      "author": "Zac Zuo",
+      "summary": "A new SOTA for compact open models on the edge Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "llm"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1155885"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt AI Featured",
+      "title": "marpy.io",
+      "url": "https://www.producthunt.com/products/marpy-io-python-first-ai-dev-platform",
+      "publishedAt": "2026-05-24T17:10:41.000Z",
+      "author": "Seth Black",
+      "summary": "AI coding platform built specifically for the Python stack Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": []
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1154818"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt Developer Tools",
+      "title": "Ajar",
+      "url": "https://www.producthunt.com/products/ajar",
+      "publishedAt": "2026-05-25T13:29:46.000Z",
+      "author": "Lauren",
+      "summary": "Lid Angle Sync & Keep Awake for AI Agents on Mac Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "agent"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1155456"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt Developer Tools",
+      "title": "tldx",
+      "url": "https://www.producthunt.com/products/tldx",
+      "publishedAt": "2026-05-24T14:53:43.000Z",
+      "author": "Brandon Young",
+      "summary": "Fast CLI to bulk-check domains via RDAP & MCP Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "mcp"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1154745"
     }
   ],
   "stats": {
-    "discoveryItems": 20
+    "discoveryItems": 8
   }
 }
