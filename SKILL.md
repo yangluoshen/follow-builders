@@ -205,9 +205,11 @@ Initialize the user workbook before cron verification:
 cd ${CLAUDE_SKILL_DIR}/scripts && node init-univer-workbook.js
 ```
 
-This copies `templates/follow-builders.univer` to
-`~/.follow-builders/follow-builders.univer`, runs `univer sync`, and updates
-`univer.unitId` / `univer.publicUrl` in `~/.follow-builders/config.json`.
+This creates `~/.follow-builders/follow-builders.univer` with `univer new`,
+applies the workbook scaffold with
+`univer run --file scripts/univer-template-scaffold.js`, runs `univer commit`,
+runs `univer sync`, and updates `univer.unitId` / `univer.publicUrl` in
+`~/.follow-builders/config.json`.
 If the `univer` CLI, login, or sync is unavailable, set `univer.enabled` to
 `false` for now and continue Markdown setup. Tell the user workbook history is
 inactive until they install/login to `univer` and rerun the init command.
@@ -356,22 +358,23 @@ Markdown remains the primary delivery format, especially for Telegram and chat
 delivery. The Univer workbook is a long-lived history and review layer that
 accumulates past digest items over time.
 
-### Template and Initialization
+### Scaffold and Initialization
 
-The repo template path is `templates/follow-builders.univer`. It must be
-scaffolded with `raw-data`, `runs`, and `_week-template`, locally committed with
-`univer commit`, and not synced. Do not mutate or sync the repo template during
-daily digest runs.
+There is no repo-stored workbook template. User workbooks are created from code:
+`init-univer-workbook.js` creates
+`~/.follow-builders/follow-builders.univer` with `univer new`, applies
+`scripts/univer-template-scaffold.js` with `univer run --file`, commits the
+scaffold with `univer commit`, syncs the workbook, and stores the returned
+`univer.unitId` plus `univer.publicUrl` in `~/.follow-builders/config.json`.
 
 For user initialization, run:
 ```bash
 cd ${CLAUDE_SKILL_DIR}/scripts && node init-univer-workbook.js
 ```
 
-The init script copies `templates/follow-builders.univer` to
-`~/.follow-builders/follow-builders.univer`, runs `univer sync`, then stores
-`univer.unitId` and the public URL
-`https://univer.ai/space/sheets/<unit-id>` in `~/.follow-builders/config.json`.
+The scaffold runs only during initial setup or explicit forced reinitialization
+(`--force`). Daily digest runs, workbook updates, and cron jobs must not run the
+scaffold; they update the already initialized workbook only.
 
 ### Workbook Contract
 
@@ -382,8 +385,7 @@ The init script copies `templates/follow-builders.univer` to
 - Daily updates may edit existing `raw-data` rows, append new `runs` rows, and
   update the current weekly sheet's display area and helper summary values.
 - Daily updates must not change `raw-data` header order, `runs` header order,
-  weekly top layout anchors, formula/reference structure, or the repo template
-  workbook.
+  weekly top layout anchors, or formula/reference structure.
 
 ### Weekly Sheet Presentation Contract
 

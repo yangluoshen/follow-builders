@@ -137,12 +137,14 @@ not sync a workbook; initialize it from the repo with:
 node scripts/init-univer-workbook.js
 ```
 
-Initialization copies `templates/follow-builders.univer`, runs `univer sync`,
-and stores the public URL `https://univer.ai/space/sheets/<unit-id>` in the
-local config.
+Initialization creates `~/.follow-builders/follow-builders.univer` with
+`univer new`, applies the code scaffold with
+`univer run --file scripts/univer-template-scaffold.js`, runs `univer commit`,
+runs `univer sync`, and stores `unitId` plus `publicUrl` in the local config.
 
-Do not edit `.univer` package internals and do not sync the repo template.
-Initialization copies and syncs the user workbook instead.
+The scaffold runs only during setup or explicit forced reinitialization
+(`--force`). Daily digest runs, workbook updates, and cron jobs update the
+already initialized workbook and do not run the scaffold.
 
 Daily runs update the local workbook and sync it. If the workbook update or sync
 fails, Markdown delivery continues.
