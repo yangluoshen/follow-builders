@@ -220,7 +220,7 @@ test('legacy telegram delivery still works', async t => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(server.requests.length, 1);
-  assert.equal(server.requests[0].url, '/bottest-token/sendMessage');
+  assert.equal(server.requests[0].url, '/sendMessage');
   assert.equal(server.requests[0].body.chat_id, 'chat-123');
   assert.equal(server.requests[0].body.text, 'Legacy Telegram digest');
   assert.match(result.stdout, /"method":"telegram"/);
