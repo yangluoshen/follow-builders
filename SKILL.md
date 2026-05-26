@@ -1,6 +1,6 @@
 ---
 name: follow-builders
-description: AI builders digest — monitors top AI builders on X and YouTube podcasts, remixes their content into digestible summaries. Use when the user wants AI industry insights, builder updates, or invokes /ai. No API keys or dependencies required — all content is fetched from a central feed.
+description: AI builders digest — monitors top AI builders on X, YouTube podcasts, official blogs, and discovery sources, remixes their content into digestible summaries. Use when the user wants AI industry insights, builder updates, or invokes /ai. No API keys or dependencies required — all content is fetched from a central feed.
 ---
 
 # Follow Builders, Not Influencers
@@ -11,9 +11,10 @@ digestible summaries of what they're saying.
 
 Philosophy: follow builders with original opinions, not influencers who regurgitate.
 
-**No API keys or environment variables are required from users.** All content
-(X/Twitter posts and YouTube transcripts) is fetched centrally and served via
-a public feed. Users only need API keys if they choose Telegram or email delivery.
+**No API keys or environment variables are required from users.** All source
+content (X/Twitter posts, YouTube transcripts, official blogs, and discovery
+candidates) is fetched centrally and served via public feeds. Users only need
+API keys if they choose Telegram or email delivery.
 
 ## Detecting Platform
 
@@ -43,14 +44,15 @@ If NOT, run the onboarding flow:
 Tell the user:
 
 "I'm your AI Builders Digest. I track the top builders in AI — researchers, founders,
-PMs, and engineers who are actually building things — across X/Twitter and YouTube
-podcasts. Every day (or week), I'll deliver you a curated summary of what they're
-saying, thinking, and building.
+PMs, and engineers who are actually building things — across X/Twitter, YouTube
+podcasts, official blogs, and discovery sources. Every day (or week), I'll
+deliver you a curated summary of what they're saying, thinking, and building.
 
-I currently track [N] builders on X and [M] podcasts. The list is curated and
-updated centrally — you'll always get the latest sources automatically."
+I currently track [N] builders on X, [M] podcasts, [B] blogs, and [D] discovery
+sources. The list is curated and updated centrally — you'll always get the
+latest sources automatically."
 
-(Replace [N] and [M] with actual counts from default-sources.json)
+(Replace [N], [M], [B], and [D] with actual counts from default-sources.json)
 
 ### Step 2: Delivery Preferences
 
@@ -141,17 +143,17 @@ ENVEOF
 
 Uncomment only the line they need. Open the file for them to paste the key.
 
-Tell the user: "All podcast and X/Twitter content is fetched for you automatically
-from a central feed — no API keys needed for that. You only need a key for
-[Telegram/email] delivery."
+Tell the user: "All podcast, X/Twitter, blog, and discovery content is fetched
+for you automatically from central feeds — no API keys needed for that. You only
+need a key for [Telegram/email] delivery."
 
 ### Step 6: Show Sources
 
-Show the full list of default builders and podcasts being tracked.
+Show the full list of default builders, podcasts, blogs, and discovery sources being tracked.
 Read from `config/default-sources.json` and display as a clean list.
 
 Tell the user: "The source list is curated and updated centrally. You'll
-automatically get the latest builders and podcasts without doing anything."
+automatically get the latest builders, podcasts, blogs, and discovery sources without doing anything."
 
 ### Step 7: Configuration Reminder
 
@@ -398,10 +400,10 @@ Weekly sheets use the Analyst Console layout:
 - Row 1 is the dark title band: `<week> Follow Builders`.
 - Row 2 is the week metadata line.
 - Row 3 is a compact control/status strip with Source, Score, Topic, Date, Sort, and View cells.
-- Rows 4-5 contain KPI cards for Items, X, Podcast, Blog, Median, and Low Score. The cards use formulas against `raw-data` where practical.
+- Rows 4-5 contain KPI cards for Items, X, Podcast, Blog, and Discovery. The cards use formulas against `raw-data` where practical.
 - Rows 6-10 contain analytical panels for Topic Heat, Score Distribution, and Daily Volume. Panels use formulas, conditional formatting, helper ranges, and charts where supported.
 - Row 11 renders the stable table header.
-- Rows 12+ render formula/reference rows into sorted `raw-data` rows, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
+- Rows 12+ render formula/reference rows into sorted `raw-data` rows, sorted by date desc, then source order `X`, `Podcast`, `Blog`, `Discovery`, then published time desc, then score desc.
 - Weekly sheets do not freeze rows or columns. Use `setFrozenRows(0)` and `setFrozenColumns(0)` so the bottom viewport remains usable.
 - Helper ranges may live to the right of column `J` and should stay visually secondary or hidden.
 - The LLM must not redesign workbook layout during daily runs. It only writes structured item content.
@@ -409,10 +411,10 @@ Weekly sheets use the Analyst Console layout:
 
 ### Sorting and Deduplication
 
-Store one row per X tweet, podcast episode, or blog article. Use stable IDs:
-`x:<tweetId>`, `podcast:<guid>`, and `blog:<normalized-url-hash>`. Weekly display
-rows sort by date newest first; within the same day, source order is
-`X -> Podcast -> Blog`.
+Store one row per selected X tweet, podcast episode, blog article, or discovery item.
+Use stable IDs: `x:<tweetId>`, `podcast:<guid>`, `blog:<normalized-url-hash>`,
+and `discovery:<stable-source-id-or-hash>`. Weekly display rows sort by date
+newest first; within the same day, source order is `X -> Podcast -> Blog -> Discovery`.
 
 ### Failure Behavior
 
@@ -445,8 +447,9 @@ The script outputs a single JSON blob with everything you need:
 - `podcasts` — podcast episodes with full transcripts
 - `x` — builders with their recent tweets (text, URLs, bios)
 - `blogs` — company blog posts with title, URL, and article content
+- `discovery` — candidate discovery items from official updates, HN, GitHub, Reddit, and Product Hunt
 - `prompts` — the remix instructions to follow
-- `stats` — counts of episodes, tweets, and blog posts
+- `stats` — counts of episodes, tweets, blog posts, and discovery candidates
 - `errors` — non-fatal issues (IGNORE these)
 
 If the script fails entirely (no JSON output), tell the user to check their
@@ -454,8 +457,8 @@ internet connection. Otherwise, use whatever content is in the JSON.
 
 ### Step 3: Check for content
 
-If `stats.podcastEpisodes` is 0 AND `stats.xBuilders` is 0 AND `stats.blogPosts`
-is 0, tell the user:
+If `stats.podcastEpisodes` is 0 AND `stats.xBuilders` is 0 AND
+`stats.blogPosts` is 0 AND `stats.discoveryItems` is 0, tell the user:
 "No new updates from your builders today. Check back tomorrow!" Then stop.
 
 ### Step 4: Remix content
@@ -468,6 +471,7 @@ Read the prompts from the `prompts` field in the JSON:
 - `prompts.summarize_podcast` — how to remix podcast transcripts
 - `prompts.summarize_tweets` — how to remix tweets
 - `prompts.summarize_blogs` — how to remix blog posts
+- `prompts.summarize_discovery` — how to judge and summarize discovery candidates
 - `prompts.translate` — how to translate to Chinese
 
 **Tweets (process first):** The `x` array has builders with tweets. Process one at a time:
@@ -482,6 +486,12 @@ Read the prompts from the `prompts` field in the JSON:
 **Blogs (process third):** The `blogs` array has company blog posts. If present:
 1. Summarize each post using `prompts.summarize_blogs`
 2. Use `name`, `title`, and `url` from the JSON object
+
+**Discovery (process fourth):** The `discovery` array has candidate items. If present:
+1. Judge each candidate using `prompts.summarize_discovery`
+2. Include only items worth surfacing to AI builders
+3. Use `sourceName`, `title`, `url`, `sourceKind`, `metadata`, and `rawSourceKey` from the JSON object
+4. Do not write omitted discovery candidates to the digest or workbook
 
 Assemble the digest following `prompts.digest_intro`.
 
@@ -498,8 +508,8 @@ Read `config.language` from the JSON:
 - **"zh":** Entire digest in Chinese. Follow `prompts.translate`.
 - **"bilingual":** Interleave English and Chinese **paragraph by paragraph**.
   For each builder's tweet summary: English version, then Chinese translation
-  directly below, then the next builder. For podcasts and blogs: English summary,
-  then Chinese translation directly below. Like this:
+  directly below, then the next builder. For podcasts, blogs, and selected
+  discovery items: English summary, then Chinese translation directly below. Like this:
 
   ```
   Box CEO Aaron Levie argues that AI agents will reshape software procurement...

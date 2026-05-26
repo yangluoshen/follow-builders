@@ -17,6 +17,7 @@ WhatsApp, etc.) with:
 - Summaries of new podcast episodes from top AI podcasts
 - Key posts and insights from 25 curated AI builders on X/Twitter
 - Full articles from official AI company blogs (Anthropic Engineering, Claude Blog)
+- Agent-selected discovery items from official updates, HN, GitHub Trending, Reddit, and Product Hunt
 - Links to all original content
 - Available in English, Chinese, or bilingual
 
@@ -43,7 +44,7 @@ Your delivery preferences are configurable through conversation. Just tell your 
 - "Make the summaries shorter"
 - "Show me my current settings"
 
-The source list (builders and podcasts) is curated centrally and updates
+The source list (builders, podcasts, blogs, and discovery feeds) is curated centrally and updates
 automatically — you always get the latest sources without doing anything.
 
 ## Customizing the Summaries
@@ -60,6 +61,7 @@ Edit the files in the `prompts/` folder:
 - `summarize-podcast.md` — how podcast episodes are summarized
 - `summarize-tweets.md` — how X/Twitter posts are summarized
 - `summarize-blogs.md` — how blog posts are summarized
+- `summarize-discovery.md` — how discovery candidates are judged
 - `digest-intro.md` — the overall digest format and tone
 - `translate.md` — how English content is translated to Chinese
 
@@ -81,6 +83,17 @@ These are plain English instructions, not code. Changes take effect on the next 
 ### Official Blogs (2)
 - [Anthropic Engineering](https://www.anthropic.com/engineering) — technical deep-dives from the Anthropic team
 - [Claude Blog](https://claude.com/blog) — product announcements and updates from Claude
+
+### Discovery Sources
+- OpenAI News
+- Google DeepMind Blog
+- Hugging Face Blog
+- Hacker News Top Stories and Algolia searches for AI/LLM
+- GitHub Trending Daily
+- r/AI_Agents top weekly posts
+- Product Hunt AI and Developer Tools feeds
+
+Discovery sources are candidate feeds. The agent decides which items are worth including before writing the digest or workbook.
 
 ## Installation
 
@@ -154,13 +167,13 @@ fails, Markdown delivery continues.
 - An AI agent (OpenClaw, Claude Code, or similar)
 - Internet connection (to fetch the central feed)
 
-That's it. No API keys needed. All content (blog articles + YouTube transcripts + X/Twitter posts)
+That's it. No API keys needed. All content (blog articles + YouTube transcripts + X/Twitter posts + discovery candidates)
 is fetched centrally and updated daily.
 
 ## How It Works
 
 1. A central feed is updated daily with the latest content from all sources
-   (blog articles via web scraping, YouTube transcripts via Supadata, X/Twitter via official API)
+   (blog articles via web scraping, YouTube transcripts via Supadata, X/Twitter via official API, discovery sources via public feeds/pages)
 2. Your agent fetches the feed — one HTTP request, no API keys
 3. Your agent remixes the raw content into a digestible summary using your preferences
 4. The digest is delivered to your messaging app (or shown in-chat)
@@ -171,7 +184,7 @@ See [examples/sample-digest.md](examples/sample-digest.md) for what the output l
 
 - No API keys are sent anywhere — all content is fetched centrally
 - If you use Telegram/email delivery, those keys are stored locally in `~/.follow-builders/.env`
-- The skill only reads public content (public blog posts, public YouTube videos, public X posts)
+- The skill only reads public content (public blog posts, public YouTube videos, public X posts, and public discovery sources)
 - Your configuration, preferences, and reading history stay on your machine
 
 ## License
