@@ -443,12 +443,47 @@ class FakeRange {
     return this;
   }
 
-  setFontWeight() { return this; }
-  setBackgroundColor() { return this; }
-  setFontColor() { return this; }
-  setVerticalAlignment() { return this; }
-  setFontSize() { return this; }
-  setHorizontalAlignment() { return this; }
+  record(method, value) {
+    this.sheet.formatting.push({
+      method,
+      value,
+      row: this.row,
+      column: this.column,
+      rowCount: this.rowCount,
+      columnCount: this.columnCount
+    });
+    return this;
+  }
+
+  clear() {
+    this.clearContent();
+    this.sheet.clearedRanges.push({
+      row: this.row,
+      column: this.column,
+      rowCount: this.rowCount,
+      columnCount: this.columnCount
+    });
+    return this;
+  }
+
+  merge(options = {}) {
+    this.sheet.merges.push({
+      row: this.row,
+      column: this.column,
+      rowCount: this.rowCount,
+      columnCount: this.columnCount,
+      options
+    });
+    return this;
+  }
+
+  setFontWeight(value) { return this.record('setFontWeight', value); }
+  setBackgroundColor(value) { return this.record('setBackgroundColor', value); }
+  setFontColor(value) { return this.record('setFontColor', value); }
+  setVerticalAlignment(value) { return this.record('setVerticalAlignment', value); }
+  setFontSize(value) { return this.record('setFontSize', value); }
+  setHorizontalAlignment(value) { return this.record('setHorizontalAlignment', value); }
+  setWrap(value) { return this.record('setWrap', value); }
 }
 
 class FakeSheet {
@@ -456,6 +491,14 @@ class FakeSheet {
     this.name = name;
     this.cells = new Map();
     this.formattedLastRow = -1;
+    this.formatting = [];
+    this.merges = [];
+    this.clearedRanges = [];
+    this.columnWidths = new Map();
+    this.rowHeights = new Map();
+    this.frozenRows = 0;
+    this.frozenColumns = 0;
+    this.hiddenGridlines = false;
   }
 
   key(row, column) {
@@ -487,13 +530,29 @@ class FakeSheet {
     this.formattedLastRow = Math.max(this.formattedLastRow, row);
   }
 
-  setFrozenRows() { return this; }
-  setFrozenColumns() { return this; }
-  setHiddenGridlines() { return this; }
-  setColumnWidths() { return this; }
-  setColumnWidth() { return this; }
-  setRowHeights() { return this; }
-  setRowHeight() { return this; }
+  setFrozenRows(value) { this.frozenRows = value; return this; }
+  setFrozenColumns(value) { this.frozenColumns = value; return this; }
+  setHiddenGridlines(value) { this.hiddenGridlines = value; return this; }
+
+  setColumnWidths(start, count, width) {
+    for (let index = 0; index < count; index += 1) this.columnWidths.set(start + index, width);
+    return this;
+  }
+
+  setColumnWidth(index, width) {
+    this.columnWidths.set(index, width);
+    return this;
+  }
+
+  setRowHeights(start, count, height) {
+    for (let index = 0; index < count; index += 1) this.rowHeights.set(start + index, height);
+    return this;
+  }
+
+  setRowHeight(index, height) {
+    this.rowHeights.set(index, height);
+    return this;
+  }
 }
 
 class FakeWorkbook {
@@ -636,6 +695,70 @@ test('generated workbook-local script renders the weekly sheet from raw-data his
   assert.equal(weekSheet.getCell(15, 3), 'Agent update');
   assert.equal(weekSheet.getCell(16, 0), '2026-05-25');
   assert.equal(weekSheet.getCell(16, 3), 'Previous day update');
+});
+
+test('generated workbook-local script renders editorial dashboard metrics and highlights', () => {
+  const workbook = new FakeWorkbook();
+  const [xItem, podcastItem] = validItemsPayload().items;
+  const blogItem = {
+    ...xItem,
+    contentId: 'blog:abc123def456',
+    sourceType: 'blog',
+    sourceName: 'OpenAI Blog',
+    title: 'Blog update',
+    summary: 'A blog note.',
+    keyPoints: ['three'],
+    topics: ['release'],
+    importanceScore: 91,
+    url: 'https://example.com/blog',
+    rawSourceKey: 'https://example.com/blog'
+  };
+  const script = buildWorkbookRunScript({
+    rawRows: [
+      mapItemToRawRow(xItem, '2026-05-26T08:01:00.000Z'),
+      mapItemToRawRow(podcastItem, '2026-05-26T08:01:00.000Z'),
+      mapItemToRawRow(blogItem, '2026-05-26T08:01:00.000Z')
+    ],
+    runRecord: runRecord(3, 'run-dashboard'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 3,
+    updated: 0,
+    weeklyRows: 3,
+    weekSheetName: '2026-W22'
+  });
+
+  const weekSheet = workbook.getSheetByName('2026-W22');
+  assert.equal(weekSheet.hiddenGridlines, true);
+  assert.equal(weekSheet.frozenRows, 15);
+  assert.equal(weekSheet.frozenColumns, 2);
+  assert.equal(weekSheet.getCell(0, 0), '2026-W22 Follow Builders');
+  assert.equal(weekSheet.getCell(1, 0), 'May 25 - May 31');
+  assert.equal(weekSheet.getCell(3, 0), 'Items');
+  assert.equal(weekSheet.getCell(4, 0), 3);
+  assert.equal(weekSheet.getCell(4, 2), 1);
+  assert.equal(weekSheet.getCell(4, 4), 1);
+  assert.equal(weekSheet.getCell(4, 6), 1);
+  assert.equal(weekSheet.getCell(6, 0), 'Top X');
+  assert.equal(weekSheet.getCell(7, 0), 'Agent update');
+  assert.equal(weekSheet.getCell(6, 3), 'Top Podcast');
+  assert.equal(weekSheet.getCell(7, 3), 'Podcast update');
+  assert.equal(weekSheet.getCell(6, 6), 'Highest Score');
+  assert.equal(weekSheet.getCell(7, 6), 'Blog update');
+  assert.equal(weekSheet.getCell(11, 0), 'Daily Digest');
+  assert.equal(weekSheet.getCell(14, 0), 'Date');
+  assert.equal(weekSheet.getCell(15, 1), 'X');
+  assert.equal(weekSheet.getCell(16, 1), 'Podcast');
+  assert.equal(weekSheet.getCell(17, 1), 'Blog');
+  assert.equal(weekSheet.columnWidths.get(4), 430);
+  assert.equal(weekSheet.rowHeights.get(15), 96);
+  assert.ok(weekSheet.formatting.some(entry => entry.method === 'setBackgroundColor' && entry.value === '#102033'));
+  assert.ok(weekSheet.formatting.some(entry => entry.method === 'setWrap' && entry.value === true));
 });
 
 test('generated workbook-local script appends after last non-empty key row when sheets have formatted blank rows', () => {
