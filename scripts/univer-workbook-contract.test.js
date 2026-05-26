@@ -96,6 +96,21 @@ test('buildContentId creates stable ids for each source type', () => {
   );
 });
 
+test('buildContentId creates stable discovery ids from rawSourceKey or normalized URL', () => {
+  assert.equal(
+    buildContentId({
+      sourceType: 'discovery',
+      rawSourceKey: 'hn:41234567',
+      url: 'https://example.com/mcp-debugger?utm_source=hn'
+    }),
+    'discovery:ab5ef57737e2'
+  );
+  assert.equal(
+    buildContentId({ sourceType: 'discovery', url: 'https://Example.com/Posts/Hello?utm_source=x#top' }),
+    'discovery:2a0963351a95'
+  );
+});
+
 test('validateItemsPayload rejects malformed payloads', () => {
   assert.throws(
     () => validateItemsPayload({ items: [{ sourceType: 'x', title: 'missing id' }] }),
@@ -149,6 +164,35 @@ test('validateItemsPayload rejects malformed payloads', () => {
       importanceScore: 80
     }]
   }));
+  assert.doesNotThrow(() => validateItemsPayload({
+    runId: 'run-1',
+    generatedAt: '2026-05-26T00:00:00.000Z',
+    items: [{
+      contentId: 'discovery:ab5ef57737e2',
+      sourceType: 'discovery',
+      sourceName: 'HN Algolia LLM',
+      title: 'An MCP debugger for coding agents',
+      url: 'https://example.com/mcp-debugger',
+      publishedAt: '2026-05-26T01:00:00.000Z',
+      capturedAt: '2026-05-26T02:00:00.000Z',
+      runDate: '2026-05-26',
+      textExcerpt: 'excerpt',
+      summary: 'summary',
+      keyPoints: ['point'],
+      topics: ['agents'],
+      importanceScore: 80
+    }]
+  }));
+  assert.throws(
+    () => validateItemsPayload({ items: [{
+      contentId: 'disco:1',
+      sourceType: 'discovery',
+      title: 'bad id',
+      url: 'https://example.com/mcp-debugger',
+      runDate: '2026-05-26'
+    }] }),
+    /items\[0\]\.contentId must start with discovery:/
+  );
 });
 
 test('mapItemToRawRow aligns item fields to RAW_DATA_HEADERS', () => {
@@ -219,6 +263,7 @@ test('groupWeeklyDisplayRows preserves blank scores instead of coercing them to 
 
 test('groupWeeklyDisplayRows sorts and maps rows for weekly display', () => {
   const rows = groupWeeklyDisplayRows([
+    { contentId: 'discovery:1', sourceType: 'discovery', sourceName: 'HN Algolia LLM', title: 'Discovery', summary: 'D', keyPoints: ['d'], topics: ['agents'], importanceScore: 100, url: 'https://example.com/d', publishedAt: '2026-05-26T04:00:00.000Z', runDate: '2026-05-26' },
     { contentId: 'blog:1', sourceType: 'blog', sourceName: 'Claude Blog', title: 'Blog', summary: 'B', keyPoints: ['b'], topics: ['release'], importanceScore: 60, url: 'https://example.com/b', publishedAt: '2026-05-25T01:00:00.000Z', runDate: '2026-05-25' },
     { contentId: 'podcast:1', sourceType: 'podcast', sourceName: 'Latent Space', title: 'Podcast', summary: 'P', keyPoints: ['p'], topics: ['research'], importanceScore: 70, url: 'https://youtube.com/p', publishedAt: '2026-05-26T01:00:00.000Z', runDate: '2026-05-26' },
     { contentId: 'x:older', sourceType: 'x', sourceName: 'X', title: 'Older tweet', summary: 'Older', keyPoints: ['older'], topics: ['agents'], importanceScore: 99, url: 'https://x.com/a/status/older', publishedAt: '2026-05-26T01:00:00.000Z', runDate: '2026-05-26' },
@@ -227,9 +272,9 @@ test('groupWeeklyDisplayRows sorts and maps rows for weekly display', () => {
     { contentId: 'x:newer', sourceType: 'x', sourceName: 'X', title: 'Newer tweet', summary: 'Newer', keyPoints: ['newer'], topics: ['agents'], importanceScore: 80, url: 'https://x.com/a/status/newer', publishedAt: '2026-05-26T03:00:00.000Z', runDate: '2026-05-26' }
   ]);
 
-  assert.deepEqual(rows.map(row => row[0]), ['2026-05-26', '2026-05-26', '2026-05-26', '2026-05-26', '2026-05-26', '2026-05-25']);
-  assert.deepEqual(rows.map(row => row[1]), ['X', 'X', 'X', 'X', 'Podcast', 'Blog']);
-  assert.deepEqual(rows.map(row => row[9]), ['x:newer', 'x:tie-high', 'x:tie-low', 'x:older', 'podcast:1', 'blog:1']);
+  assert.deepEqual(rows.map(row => row[0]), ['2026-05-26', '2026-05-26', '2026-05-26', '2026-05-26', '2026-05-26', '2026-05-26', '2026-05-25']);
+  assert.deepEqual(rows.map(row => row[1]), ['X', 'X', 'X', 'X', 'Podcast', 'Discovery', 'Blog']);
+  assert.deepEqual(rows.map(row => row[9]), ['x:newer', 'x:tie-high', 'x:tie-low', 'x:older', 'podcast:1', 'discovery:1', 'blog:1']);
   assert.deepEqual(rows[1], [
     '2026-05-26',
     'X',
