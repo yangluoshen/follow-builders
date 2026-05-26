@@ -397,6 +397,23 @@ test('unsupported target method returns error summary and exits non-zero', async
   }]);
 });
 
+test('configured target with missing method returns error instead of default stdout', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  await writeConfig(home, { delivery: { targets: [{}] } });
+
+  const result = await runDeliver({ home, message: 'Malformed delivery target' });
+
+  assert.equal(result.status, 1);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'error');
+  assert.equal(summary.results.length, 1);
+  assert.equal(summary.results[0].status, 'error');
+  assert.equal(summary.results[0].method, 'stdout');
+  assert.match(summary.results[0].message, /Unsupported delivery method: missing method/);
+});
+
 test('stdout default still prints only the digest text', async t => {
   const home = await makeTempHome();
   t.after(() => rm(home, { recursive: true, force: true }));

@@ -262,7 +262,7 @@ async function sendTarget(target, digestText, options = {}) {
     }
 
     default:
-      throw new Error(`Unsupported delivery method: ${target.method || 'stdout'}`);
+      throw new Error(`Unsupported delivery method: ${target.method || 'missing method'}`);
   }
 }
 
@@ -286,7 +286,7 @@ async function main() {
     return;
   }
 
-  const isSingleStdout = targets.length === 1 && (targets[0].method || 'stdout') === 'stdout';
+  const isSingleStdout = targets.length === 1 && targets[0].method === 'stdout';
   if (isSingleStdout) {
     console.log(digestText);
     return;
