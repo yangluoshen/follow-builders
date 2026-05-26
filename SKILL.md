@@ -382,18 +382,21 @@ The init script copies `templates/follow-builders.univer` to
 - Daily updates may edit existing `raw-data` rows, append new `runs` rows, and
   update the current weekly sheet's display area and helper summary values.
 - Daily updates must not change `raw-data` header order, `runs` header order,
-  weekly top layout anchors, chart anchors, formula-zone structure, or the repo
-  template workbook.
+  weekly top layout anchors, formula/reference structure, or the repo template
+  workbook.
 
 ### Weekly Sheet Presentation Contract
 
 Weekly sheets use the Editorial Dashboard layout:
 
-- Rows 1-10 are dashboard content: dark title band, week metadata, KPI cards, and highlight cards.
-- Rows 12-14 introduce the daily digest table.
-- Row 15 renders the stable table header.
-- Rows 16+ render weekly rows from `raw-data`, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
-- Dashboard metrics and highlights are computed by the workbook updater from weekly `raw-data` rows.
+- Row 1 is the dark title band: `<week> Follow Builders`.
+- Row 2 is the week metadata line.
+- Row 3 contains KPI labels at A/C/E/G/I.
+- Rows 4-5 contain KPI cards for total, X, Podcast, Blog, and Avg Score. The cards use formulas against `raw-data` where practical.
+- Row 6 introduces the Daily Digest table.
+- Row 7 renders the stable table header.
+- Rows 8+ render formula/reference rows into sorted `raw-data` rows, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
+- Weekly sheets freeze the top 7 rows and do not freeze columns.
 - The LLM must not redesign workbook layout during daily runs. It only writes structured item content.
 - `raw-data` remains the source of truth and must not be visually optimized at the expense of stable indexing.
 

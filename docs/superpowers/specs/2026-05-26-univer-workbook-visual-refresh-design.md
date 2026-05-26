@@ -21,22 +21,23 @@ The first viewport should read like a weekly intelligence dashboard, not a datab
 
 ## Weekly Sheet Layout
 
-Rows 1-10 become the dashboard area.
+Rows 1-5 become the compact dashboard area.
 
-- A dark title band shows the ISO week name, date range, generated timestamp, run id, and public workbook URL.
-- KPI cards show total weekly items, X count, podcast count, blog count, and optionally average/top score.
-- A source mix chart or chart-ready range summarizes X / Podcast / Blog counts.
-- Highlight cards surface top content, such as top X item, top podcast item, and highest-score item.
+- Row 1 is a dark title band showing `<week> Follow Builders`.
+- Row 2 shows the date range, generated timestamp, and public workbook URL.
+- Row 3 shows KPI labels at A/C/E/G/I.
+- Rows 4-5 show KPI cards for total weekly items, X count, podcast count, blog count, and average score. The cards use formulas against `raw-data` where practical.
 
-Rows 12-14 become a compact section transition.
+Rows 6-7 become a compact section transition.
 
-- A small section label introduces the daily digest table.
-- Row 15 renders the table header using a strong but restrained color.
-- Frozen rows should keep the dashboard context and header stable while scrolling.
+- Row 6 introduces the daily digest table.
+- Row 7 renders the table header using a strong but restrained color.
+- Frozen rows should keep the dashboard context and header stable while scrolling. Weekly sheets freeze 7 top rows and 0 columns.
 
-Rows 16 onward become the readable digest table.
+Rows 8 onward become the readable digest table.
 
 - Date, Type, Source, Title, Summary, Key Points, Topics, Score, URL, and contentId remain available.
+- Data cells are formulas/references into the sorted `raw-data` rows rather than hardcoded display values.
 - Widths and row heights should prioritize reading `Title`, `Summary`, and `Key Points`.
 - Text columns should wrap and align top.
 - Row backgrounds should alternate subtly.
@@ -64,10 +65,8 @@ The implementation should use visible workbook features rather than only cell te
 
 - Merged title/dashboard ranges where appropriate.
 - Filled KPI blocks with strong typography.
-- Source mix chart if the current Univer CLI chart APIs work reliably in the template/update path.
-- Chart-ready helper range if chart insertion is unreliable; the helper range can be hidden or placed outside the main viewport.
 - Conditional formatting for score color scale.
-- Frozen dashboard/header rows and first columns.
+- Frozen dashboard/header rows, with no frozen columns on weekly sheets.
 - Thoughtful column widths and row heights.
 - Wrapped text and top alignment for digest rows.
 - Subtle alternating row backgrounds.
@@ -84,8 +83,9 @@ For the current ISO week:
 2. Append one row to `runs`.
 3. Read all `raw-data` rows whose `runDate` is in the week range.
 4. Sort by date descending, then source order `X`, `Podcast`, `Blog`, then published time descending, then score descending.
-5. Compute dashboard metrics and highlight rows from the weekly rows.
-6. Render the weekly sheet using the Editorial Dashboard layout.
+5. Preserve the sorted `raw-data` row numbers and render weekly rows as formulas/references into those rows.
+6. Render KPI cards as formulas against `raw-data` where practical.
+7. Render the weekly sheet using the compact Editorial Dashboard layout.
 
 This preserves history and makes weekly sheets stable across daily updates.
 
@@ -97,7 +97,7 @@ The template should contain:
 
 - `raw-data` headers and practical widths.
 - `runs` headers and practical widths.
-- `_week-template` with the dashboard shell, table header, sample formatting, conditional formatting, and any chart-ready helper area.
+- `_week-template` with the dashboard shell, table header, sample formatting, and conditional formatting.
 
 The repo template must remain committed but unsynced. User initialization will copy and sync it later.
 
@@ -107,8 +107,8 @@ The repo template must remain committed but unsynced. User initialization will c
 
 - Clear and redraw the dashboard range deterministically on each run.
 - Preserve raw-data and runs contracts.
-- Render dashboard metrics from weekly rows.
-- Render highlight cards from computed weekly rows.
+- Render dashboard metrics as formulas against `raw-data` where practical.
+- Render weekly data rows as formulas/references into sorted `raw-data` rows.
 - Apply dashboard/table formatting every run so old sheets converge to the new style.
 - Avoid unbounded clearing that could corrupt hidden/raw sheets.
 
@@ -120,7 +120,7 @@ Update `SKILL.md` so future agents understand:
 
 - Weekly sheets use the Editorial Dashboard layout.
 - `raw-data` is the source of truth.
-- The renderer owns dashboard metrics, highlights, chart-ready summaries, and table formatting.
+- The renderer owns dashboard metrics, formula/reference rows, and table formatting.
 - LLM output should focus on structured item content, not workbook layout decisions.
 
 ## Acceptance Criteria
@@ -131,7 +131,6 @@ Update `SKILL.md` so future agents understand:
 - The digest table is readable at 100% zoom in the Univer viewer.
 - Summary and key-point text are wrapped and not clipped into unreadable single-line runs.
 - Score cells are visually differentiated.
-- Source mix is visible either as a chart or a styled chart-ready block.
 - `raw-data` remains append/upsert oriented and visually secondary.
 - Existing script tests pass.
 - Workbook update failures remain non-blocking for Markdown delivery.

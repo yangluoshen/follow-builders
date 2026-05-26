@@ -204,7 +204,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
 
   return `() => {
   const payload = ${JSON.stringify(payload)};
-  const DISPLAY_HEADER_ROW = 14;
+  const DISPLAY_HEADER_ROW = 6;
   const DISPLAY_DATA_ROW = DISPLAY_HEADER_ROW + 1;
   const DASHBOARD_CLEAR_ROWS = 14;
   const TABLE_CLEAR_EXTRA_ROWS = 160;
@@ -360,36 +360,71 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     if (!payload.weekStartDate || !payload.weekEndDate) return payload.displayRows;
     const lastRow = lastNonEmptyRowInColumn(sheet, 0, 1);
     if (lastRow < 1) return [];
-    const sourceLabels = { x: 'X', podcast: 'Podcast', blog: 'Blog' };
     const sourceOrder = { x: 0, podcast: 1, blog: 2 };
     const values = sheet.getRange(1, 0, lastRow, payload.rawHeaders.length).getValues();
     return values
+      .map((row, index) => ({ row, rawRowNumber: index + 2 }))
       .filter(row => {
-        const contentId = stringValue(row[0]);
-        const runDate = stringValue(row[9]);
+        const contentId = stringValue(row.row[0]);
+        const runDate = stringValue(row.row[9]);
         return contentId && runDate >= payload.weekStartDate && runDate <= payload.weekEndDate;
       })
       .sort((a, b) => {
-        const dateCompare = stringValue(b[9]).localeCompare(stringValue(a[9]));
+        const dateCompare = stringValue(b.row[9]).localeCompare(stringValue(a.row[9]));
         if (dateCompare !== 0) return dateCompare;
-        const sourceCompare = (sourceOrder[stringValue(a[1])] ?? 99) - (sourceOrder[stringValue(b[1])] ?? 99);
+        const sourceCompare = (sourceOrder[stringValue(a.row[1])] ?? 99) - (sourceOrder[stringValue(b.row[1])] ?? 99);
         if (sourceCompare !== 0) return sourceCompare;
-        const publishedCompare = stringValue(b[7]).localeCompare(stringValue(a[7]));
+        const publishedCompare = stringValue(b.row[7]).localeCompare(stringValue(a.row[7]));
         if (publishedCompare !== 0) return publishedCompare;
-        return Number(b[14] || 0) - Number(a[14] || 0);
+        return Number(b.row[14] || 0) - Number(a.row[14] || 0);
       })
-      .map(row => [
-        stringValue(row[9]),
-        sourceLabels[stringValue(row[1])] || stringValue(row[1]),
-        stringValue(row[2]) || stringValue(row[3]),
-        stringValue(row[5]),
-        stringValue(row[11]),
-        stringValue(row[12]),
-        stringValue(row[13]),
-        Number.isFinite(Number(row[14])) ? Number(row[14]) : '',
-        stringValue(row[6]),
-        stringValue(row[0])
-      ]);
+      .map(({ row, rawRowNumber }) => ({
+        rawRowNumber,
+        sourceType: stringValue(row[1]),
+        score: Number.isFinite(Number(row[14])) ? Number(row[14]) : ''
+      }));
+  }
+
+  function rawFormula(column, rowNumber) {
+    return "='raw-data'!" + column + rowNumber;
+  }
+
+  function sourceTypeFormula(rowNumber) {
+    const cell = "'raw-data'!B" + rowNumber;
+    return '=IF(' + cell + '="x","X",IF(' + cell + '="podcast","Podcast",IF(' + cell + '="blog","Blog",' + cell + ')))';
+  }
+
+  function sourceFormula(rowNumber) {
+    return '=IF(\\'raw-data\\'!C' + rowNumber + '<>"",\\'raw-data\\'!C' + rowNumber + ',\\'raw-data\\'!D' + rowNumber + ')';
+  }
+
+  function weeklyDisplayRow(row) {
+    if (Array.isArray(row)) return row;
+    const rawRow = row.rawRowNumber;
+    return [
+      rawFormula('J', rawRow),
+      sourceTypeFormula(rawRow),
+      sourceFormula(rawRow),
+      rawFormula('F', rawRow),
+      rawFormula('L', rawRow),
+      rawFormula('M', rawRow),
+      rawFormula('N', rawRow),
+      rawFormula('O', rawRow),
+      rawFormula('G', rawRow),
+      rawFormula('A', rawRow)
+    ];
+  }
+
+  function dashboardFormula(sourceType) {
+    if (!payload.weekStartDate || !payload.weekEndDate) return '';
+    const base = "'raw-data'!J:J,\\\">=" + payload.weekStartDate + "\\",'raw-data'!J:J,\\\"<=" + payload.weekEndDate + "\\\"";
+    if (!sourceType) return '=COUNTIFS(' + base + ')';
+    return '=COUNTIFS(' + base + ",'raw-data'!B:B,\\\"" + sourceType + "\\\")";
+  }
+
+  function averageScoreFormula() {
+    if (!payload.weekStartDate || !payload.weekEndDate) return '';
+    return "=IFERROR(ROUND(AVERAGEIFS('raw-data'!O:O,'raw-data'!J:J,\\\">=" + payload.weekStartDate + "\\\",'raw-data'!J:J,\\\"<=" + payload.weekEndDate + "\\\"),0),\\\"—\\\")";
   }
 
   function sourceTypeFromDisplayType(value) {
@@ -413,12 +448,6 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return shortDate(payload.weekStartDate) + ' - ' + shortDate(payload.weekEndDate);
   }
 
-  function truncateText(value, maxLength) {
-    const text = stringValue(value).replace(/\\s+/g, ' ').trim();
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength - 1) + '…';
-  }
-
   function countBySource(rows) {
     const counts = { x: 0, podcast: 0, blog: 0 };
     rows.forEach(row => {
@@ -426,25 +455,6 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       if (Object.prototype.hasOwnProperty.call(counts, source)) counts[source] += 1;
     });
     return counts;
-  }
-
-  function numericScores(rows) {
-    return rows
-      .map(row => Number(row[7]))
-      .filter(value => Number.isFinite(value));
-  }
-
-  function topRow(rows, predicate) {
-    const candidates = predicate ? rows.filter(predicate) : rows;
-    return [...candidates].sort((a, b) => Number(b[7] || 0) - Number(a[7] || 0))[0] || null;
-  }
-
-  function highlightSummary(row) {
-    if (!row) return ['No items yet', 'Waiting for the next digest update.'];
-    return [
-      truncateText(row[3], 88),
-      truncateText(row[4] || row[5] || row[8], 150)
-    ];
   }
 
   function scoreFill(score) {
@@ -473,17 +483,11 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
 
   function renderWeeklySheet(sheet, inserted, updated, rows) {
     const headers = payload.weekHeaders;
-    const counts = countBySource(rows);
-    const scores = numericScores(rows);
-    const averageScore = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : '';
-    const topScore = scores.length ? Math.max(...scores) : '';
-    const topX = topRow(rows, row => sourceTypeFromDisplayType(row[1]) === 'x');
-    const topPodcast = topRow(rows, row => sourceTypeFromDisplayType(row[1]) === 'podcast');
-    const highest = topRow(rows);
+    const displayRows = rows.map(weeklyDisplayRow);
 
     sheet.setHiddenGridlines(true);
-    sheet.setFrozenRows(15);
-    sheet.setFrozenColumns(2);
+    sheet.setFrozenRows(7);
+    sheet.setFrozenColumns(0);
 
     sheet.getRange(0, 0, DASHBOARD_CLEAR_ROWS, headers.length).clear();
     const staleClearRows = Math.max(sheet.getLastRow() - DISPLAY_DATA_ROW + 1, rows.length + TABLE_CLEAR_EXTRA_ROWS, 1);
@@ -500,11 +504,11 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     sheet.getRange('A2').setValue(humanDateRange() + ' · Generated ' + payload.runRecord.finishedAt + ' · ' + (payload.runRecord.publicUrl || 'Local workbook'));
     sheet.getRange('A2:J2').setBackgroundColor('#EAF2F8').setFontColor(COLORS.text).setVerticalAlignment('middle');
 
-    sheet.getRange('A4:B5').merge({ isForceMerge: true }).setValue(rows.length);
-    sheet.getRange('C4:D5').merge({ isForceMerge: true }).setValue(counts.x);
-    sheet.getRange('E4:F5').merge({ isForceMerge: true }).setValue(counts.podcast);
-    sheet.getRange('G4:H5').merge({ isForceMerge: true }).setValue(counts.blog);
-    sheet.getRange('I4:J5').merge({ isForceMerge: true }).setValue(averageScore === '' ? '—' : averageScore);
+    sheet.getRange('A4:B5').merge({ isForceMerge: true }).setValue(dashboardFormula() || rows.length);
+    sheet.getRange('C4:D5').merge({ isForceMerge: true }).setValue(dashboardFormula('x') || countBySource(rows).x);
+    sheet.getRange('E4:F5').merge({ isForceMerge: true }).setValue(dashboardFormula('podcast') || countBySource(rows).podcast);
+    sheet.getRange('G4:H5').merge({ isForceMerge: true }).setValue(dashboardFormula('blog') || countBySource(rows).blog);
+    sheet.getRange('I4:J5').merge({ isForceMerge: true }).setValue(averageScoreFormula() || '—');
     [
       ['A4:B5', COLORS.titleSoft],
       ['C4:D5', COLORS.x],
@@ -520,29 +524,8 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     sheet.getRange('G3').setValue('Blog');
     sheet.getRange('I3').setValue('Avg Score');
 
-    const topXSummary = highlightSummary(topX);
-    const podcastSummary = highlightSummary(topPodcast);
-    const highSummary = highlightSummary(highest);
-    sheet.getRange('A7:C7').merge({ isForceMerge: true }).setValue('Top X');
-    sheet.getRange('D7:F7').merge({ isForceMerge: true }).setValue('Top Podcast');
-    sheet.getRange('G7:J7').merge({ isForceMerge: true }).setValue('Highest Score' + (topScore === '' ? '' : ' · ' + topScore));
-    sheet.getRange('A8:C8').merge({ isForceMerge: true }).setValue(topXSummary[0]);
-    sheet.getRange('D8:F8').merge({ isForceMerge: true }).setValue(podcastSummary[0]);
-    sheet.getRange('G8:J8').merge({ isForceMerge: true }).setValue(highSummary[0]);
-    sheet.getRange('A9:C10').merge({ isForceMerge: true }).setValue(topXSummary[1]);
-    sheet.getRange('D9:F10').merge({ isForceMerge: true }).setValue(podcastSummary[1]);
-    sheet.getRange('G9:J10').merge({ isForceMerge: true }).setValue(highSummary[1]);
-    [
-      ['A7:C10', COLORS.x],
-      ['D7:F10', COLORS.podcast],
-      ['G7:J10', COLORS.green]
-    ].forEach(([a1, color]) => {
-      sheet.getRange(a1).setBackgroundColor(COLORS.card).setFontColor(COLORS.text).setVerticalAlignment('top').setWrap(true);
-      sheet.getRange(a1.split(':')[0]).setFontColor(color).setFontWeight('bold');
-    });
-
-    sheet.getRange('A12:J13').merge({ isForceMerge: true }).setValue('Daily Digest');
-    sheet.getRange('A12:J13').setBackgroundColor(COLORS.sheet).setFontColor(COLORS.text).setFontWeight('bold').setFontSize(16).setVerticalAlignment('middle');
+    sheet.getRange('A6:J6').merge({ isForceMerge: true }).setValue('Daily Digest');
+    sheet.getRange('A6:J6').setBackgroundColor(COLORS.sheet).setFontColor(COLORS.text).setFontWeight('bold').setFontSize(16).setVerticalAlignment('middle');
 
     sheet.getRange(DISPLAY_HEADER_ROW, 0, 1, headers.length).setValues([headers]);
     sheet
@@ -553,16 +536,16 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       .setVerticalAlignment('middle')
       .setHorizontalAlignment('left');
 
-    if (rows.length > 0) {
-      sheet.getRange(DISPLAY_DATA_ROW, 0, rows.length, headers.length).setValues(rows);
-      sheet.getRange(DISPLAY_DATA_ROW, 0, rows.length, headers.length).setVerticalAlignment('top').setHorizontalAlignment('left').setWrap(true);
-      sheet.setRowHeights(DISPLAY_DATA_ROW, rows.length, 96);
+    if (displayRows.length > 0) {
+      sheet.getRange(DISPLAY_DATA_ROW, 0, displayRows.length, headers.length).setValues(displayRows);
+      sheet.getRange(DISPLAY_DATA_ROW, 0, displayRows.length, headers.length).setVerticalAlignment('top').setHorizontalAlignment('left').setWrap(true);
+      sheet.setRowHeights(DISPLAY_DATA_ROW, displayRows.length, 96);
       rows.forEach((row, index) => {
         const targetRow = DISPLAY_DATA_ROW + index;
         const rowFill = index % 2 === 0 ? COLORS.tableAlt : COLORS.card;
         sheet.getRange(targetRow, 0, 1, headers.length).setBackgroundColor(rowFill);
-        sheet.getRange(targetRow, 1).setFontColor(sourceAccent(row[1])).setFontWeight('bold');
-        sheet.getRange(targetRow, 7).setBackgroundColor(scoreFill(row[7])).setFontWeight('bold').setHorizontalAlignment('center');
+        sheet.getRange(targetRow, 1).setFontColor(sourceAccent(Array.isArray(row) ? row[1] : row.sourceType)).setFontWeight('bold');
+        sheet.getRange(targetRow, 7).setBackgroundColor(scoreFill(Array.isArray(row) ? row[7] : row.score)).setFontWeight('bold').setHorizontalAlignment('center');
       });
     }
 
@@ -573,12 +556,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     sheet.setRowHeight(2, 26);
     sheet.setRowHeight(3, 44);
     sheet.setRowHeight(4, 44);
-    sheet.setRowHeight(6, 24);
-    sheet.setRowHeight(7, 34);
-    sheet.setRowHeight(8, 46);
-    sheet.setRowHeight(9, 46);
-    sheet.setRowHeight(11, 30);
-    sheet.setRowHeight(12, 30);
+    sheet.setRowHeight(5, 30);
     sheet.setRowHeight(DISPLAY_HEADER_ROW, 32);
   }
 

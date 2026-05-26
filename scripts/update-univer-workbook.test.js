@@ -665,7 +665,9 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
     rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
     displayRows: groupWeeklyDisplayRows([firstItem]),
     runRecord: runRecord(1, 'run-1'),
-    weekSheetName: '2026-W22'
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
   });
 
   assert.deepEqual(executeWorkbookRunScript(firstRun, workbook), {
@@ -686,16 +688,18 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
   assert.equal(rawSheet.getCell(1, 5), 'Agent update');
   assert.equal(runsSheet.getCell(1, 5), 1);
   assert.equal(runsSheet.getCell(1, 6), 0);
-  assert.equal(weekSheet.getCell(14, 0), 'Date');
-  assert.equal(weekSheet.getCell(15, 0), '2026-05-26');
-  assert.equal(weekSheet.getCell(15, 3), 'Agent update');
+  assert.equal(weekSheet.getCell(6, 0), 'Date');
+  assert.equal(weekSheet.getCell(7, 0), "='raw-data'!J2");
+  assert.equal(weekSheet.getCell(7, 3), "='raw-data'!F2");
 
   const updatedItem = { ...firstItem, title: 'Updated agent update', summary: 'New summary' };
   const secondRun = buildWorkbookRunScript({
     rawRows: [mapItemToRawRow(updatedItem, '2026-05-26T09:01:00.000Z')],
     displayRows: groupWeeklyDisplayRows([updatedItem]),
     runRecord: runRecord(2, 'run-2'),
-    weekSheetName: '2026-W22'
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
   });
 
   assert.deepEqual(executeWorkbookRunScript(secondRun, workbook), {
@@ -708,7 +712,7 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
   assert.equal(rawSheet.getCell(1, 5), 'Updated agent update');
   assert.equal(runsSheet.getCell(2, 5), 0);
   assert.equal(runsSheet.getCell(2, 6), 1);
-  assert.equal(weekSheet.getCell(15, 3), 'Updated agent update');
+  assert.equal(weekSheet.getCell(7, 3), "='raw-data'!F2");
 });
 
 test('generated workbook-local script renders the weekly sheet from raw-data history', () => {
@@ -754,10 +758,11 @@ test('generated workbook-local script renders the weekly sheet from raw-data his
   });
 
   const weekSheet = workbook.getSheetByName('2026-W22');
-  assert.equal(weekSheet.getCell(15, 0), '2026-05-26');
-  assert.equal(weekSheet.getCell(15, 3), 'Agent update');
-  assert.equal(weekSheet.getCell(16, 0), '2026-05-25');
-  assert.equal(weekSheet.getCell(16, 3), 'Previous day update');
+  assert.equal(weekSheet.getCell(7, 0), "='raw-data'!J3");
+  assert.equal(weekSheet.getCell(7, 1), '=IF(\'raw-data\'!B3="x","X",IF(\'raw-data\'!B3="podcast","Podcast",IF(\'raw-data\'!B3="blog","Blog",\'raw-data\'!B3)))');
+  assert.equal(weekSheet.getCell(7, 3), "='raw-data'!F3");
+  assert.equal(weekSheet.getCell(8, 0), "='raw-data'!J2");
+  assert.equal(weekSheet.getCell(8, 3), "='raw-data'!F2");
 });
 
 test('generated workbook-local script expands existing old weekly sheets before rendering dashboard', () => {
@@ -768,7 +773,9 @@ test('generated workbook-local script expands existing old weekly sheets before 
     rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
     displayRows: groupWeeklyDisplayRows([firstItem]),
     runRecord: runRecord(1, 'run-old-week-sheet'),
-    weekSheetName: '2026-W22'
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
   });
 
   assert.deepEqual(executeWorkbookRunScript(script, workbook), {
@@ -782,11 +789,11 @@ test('generated workbook-local script expands existing old weekly sheets before 
   const weekSheet = workbook.getSheetByName('2026-W22');
   assert.ok(weekSheet.rowCapacity >= 176);
   assert.equal(weekSheet.getCell(0, 0), '2026-W22 Follow Builders');
-  assert.equal(weekSheet.getCell(14, 0), 'Date');
-  assert.equal(weekSheet.getCell(15, 3), 'Agent update');
+  assert.equal(weekSheet.getCell(6, 0), 'Date');
+  assert.equal(weekSheet.getCell(7, 3), "='raw-data'!F2");
 });
 
-test('generated workbook-local script renders editorial dashboard metrics and highlights', () => {
+test('generated workbook-local script renders compact dashboard formulas and raw-data references', () => {
   const workbook = new FakeWorkbook();
   const [xItem, podcastItem] = validItemsPayload().items;
   const blogItem = {
@@ -824,8 +831,8 @@ test('generated workbook-local script renders editorial dashboard metrics and hi
 
   const weekSheet = workbook.getSheetByName('2026-W22');
   assert.equal(weekSheet.hiddenGridlines, true);
-  assert.equal(weekSheet.frozenRows, 15);
-  assert.equal(weekSheet.frozenColumns, 2);
+  assert.equal(weekSheet.frozenRows, 7);
+  assert.equal(weekSheet.frozenColumns, 0);
   assert.equal(weekSheet.getCell(0, 0), '2026-W22 Follow Builders');
   assert.match(weekSheet.getCell(1, 0), /May 25 - May 31/);
   assert.equal(weekSheet.getCell(2, 0), 'Items');
@@ -833,25 +840,23 @@ test('generated workbook-local script renders editorial dashboard metrics and hi
   assert.equal(weekSheet.getCell(2, 4), 'Podcast');
   assert.equal(weekSheet.getCell(2, 6), 'Blog');
   assert.equal(weekSheet.getCell(2, 8), 'Avg Score');
-  assert.equal(weekSheet.getCell(3, 0), 3);
-  assert.equal(weekSheet.getCell(3, 2), 1);
-  assert.equal(weekSheet.getCell(3, 4), 1);
-  assert.equal(weekSheet.getCell(3, 6), 1);
-  assert.equal(weekSheet.getCell(3, 8), 84);
+  assert.equal(weekSheet.getCell(3, 0), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31")');
+  assert.equal(weekSheet.getCell(3, 2), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"x")');
+  assert.equal(weekSheet.getCell(3, 4), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"podcast")');
+  assert.equal(weekSheet.getCell(3, 6), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"blog")');
+  assert.equal(weekSheet.getCell(3, 8), '=IFERROR(ROUND(AVERAGEIFS(\'raw-data\'!O:O,\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31"),0),"—")');
   ['A4:B5', 'C4:D5', 'E4:F5', 'G4:H5', 'I4:J5'].forEach(a1 => assertMergedRange(weekSheet, a1));
-  assert.equal(weekSheet.getCell(6, 0), 'Top X');
-  assert.equal(weekSheet.getCell(7, 0), 'Agent update');
-  assert.equal(weekSheet.getCell(6, 3), 'Top Podcast');
-  assert.equal(weekSheet.getCell(7, 3), 'Podcast update');
-  assert.match(weekSheet.getCell(6, 6), /Highest Score/);
-  assert.equal(weekSheet.getCell(7, 6), 'Blog update');
-  assert.equal(weekSheet.getCell(11, 0), 'Daily Digest');
-  assert.equal(weekSheet.getCell(14, 0), 'Date');
-  assert.equal(weekSheet.getCell(15, 1), 'X');
-  assert.equal(weekSheet.getCell(16, 1), 'Podcast');
-  assert.equal(weekSheet.getCell(17, 1), 'Blog');
+  assert.equal(weekSheet.getCell(5, 0), 'Daily Digest');
+  assert.equal(weekSheet.getCell(6, 0), 'Date');
+  assert.equal(weekSheet.getCell(7, 0), "='raw-data'!J2");
+  assert.equal(weekSheet.getCell(7, 1), '=IF(\'raw-data\'!B2="x","X",IF(\'raw-data\'!B2="podcast","Podcast",IF(\'raw-data\'!B2="blog","Blog",\'raw-data\'!B2)))');
+  assert.equal(weekSheet.getCell(8, 1), '=IF(\'raw-data\'!B3="x","X",IF(\'raw-data\'!B3="podcast","Podcast",IF(\'raw-data\'!B3="blog","Blog",\'raw-data\'!B3)))');
+  assert.equal(weekSheet.getCell(9, 1), '=IF(\'raw-data\'!B4="x","X",IF(\'raw-data\'!B4="podcast","Podcast",IF(\'raw-data\'!B4="blog","Blog",\'raw-data\'!B4)))');
+  assert.notEqual(weekSheet.getCell(6, 0), 'Top X');
+  assert.notEqual(weekSheet.getCell(6, 3), 'Top Podcast');
+  assert.doesNotMatch(String(weekSheet.getCell(6, 6)), /Highest Score/);
   assert.equal(weekSheet.columnWidths.get(4), 430);
-  assert.equal(weekSheet.rowHeights.get(15), 96);
+  assert.equal(weekSheet.rowHeights.get(7), 96);
   assert.ok(weekSheet.formatting.some(entry => entry.method === 'setBackgroundColor' && entry.value === '#102033'));
   assert.ok(weekSheet.formatting.some(entry => entry.method === 'setWrap' && entry.value === true));
 });
