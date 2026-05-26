@@ -160,6 +160,52 @@ printf 'Digest prepared.' > "$final_message_path"
   assert.match(result.stdout, /Fake digest from absolute Node prompt/);
 });
 
+test('Codex prompt treats discovery as agent-judged candidate material', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const fakeCodex = join(home, 'fake-codex');
+
+  await writeExecutable(fakeCodex, `#!/bin/sh
+last=
+final_message_path=
+previous=
+for arg do
+  if [ "$previous" = "--output-last-message" ]; then
+    final_message_path="$arg"
+  fi
+  last="$arg"
+  previous="$arg"
+done
+
+case "$last" in
+  *"stats.discoveryItems"*"discovery candidates"*"prompts.summarize_discovery"*"sourceType"*"discovery"*"contentId"*"discovery:<stable"*) ;;
+  *)
+    echo "prompt did not include discovery judgment and workbook instructions" >&2
+    exit 47
+    ;;
+esac
+
+case "$last" in
+  *"podcastEpisodes, stats.xBuilders, stats.blogPosts, and stats.discoveryItems are all 0"*) ;;
+  *)
+    echo "prompt did not update empty-run logic for discovery" >&2
+    exit 48
+    ;;
+esac
+
+digest_path="$(printf '%s\\n' "$last" | sed -n 's/^5\\. Write only the final digest markdown text to \\(.*\\)\\.$/\\1/p')"
+items_json_path="$(printf '%s\\n' "$last" | sed -n 's/^6\\. Write the structured workbook items JSON to \\(.*\\)\\.$/\\1/p')"
+printf 'Discovery-aware digest' > "$digest_path"
+printf '{"runId":"test-run","generatedAt":"2026-05-26T00:00:00.000Z","items":[],"presentationHints":{"weeklyThemes":[],"highlightContentIds":[]}}' > "$items_json_path"
+printf 'Digest prepared.' > "$final_message_path"
+`);
+
+  const result = runDigestWithFakeCodex({ codexPath: fakeCodex, home });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Discovery-aware digest/);
+});
+
 test('items JSON final-message failure does not block markdown stdout delivery', async t => {
   const home = await makeTempHome();
   t.after(() => rm(home, { recursive: true, force: true }));

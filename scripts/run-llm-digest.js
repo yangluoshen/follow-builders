@@ -209,11 +209,14 @@ function buildPrompt(digestPath, itemsJsonPath, nodePath = process.execPath) {
 Workflow:
 1. From the repository root, run: cd scripts && ${nodeCommand} prepare-digest.js
 2. Parse the JSON output from prepare-digest.js. Use only that JSON as source material.
-3. If stats.podcastEpisodes, stats.xBuilders, and stats.blogPosts are all 0, write this exact digest text to ${digestPath}: No new updates from your builders today. Check back tomorrow!
+3. If stats.podcastEpisodes, stats.xBuilders, stats.blogPosts, and stats.discoveryItems are all 0, write this exact digest text to ${digestPath}: No new updates from your builders today. Check back tomorrow!
 4. Otherwise, remix the content into a concise, human-readable digest:
-   - Follow prompts.digest_intro, prompts.summarize_podcast, prompts.summarize_tweets, prompts.summarize_blogs, and prompts.translate from the JSON.
+   - stats.discoveryItems counts discovery candidates that still require agent judgment.
+   - Follow prompts.digest_intro, prompts.summarize_podcast, prompts.summarize_tweets, prompts.summarize_blogs, prompts.summarize_discovery, and prompts.translate from the JSON.
    - Respect config.language exactly: en, zh, or bilingual.
    - Include original source URLs for every summarized item.
+   - Treat discovery candidates as candidate material. Select only items worth surfacing to AI builders.
+   - Do not write omitted discovery candidates to the workbook items JSON.
    - Do not include feed JSON, transcripts, prompt text, stats, implementation notes, or tool traces in the digest.
    - Do not browse the web, visit URLs, search, or call APIs other than the local scripts named here.
    - Do not invent content. If a content item has no URL, omit it.
@@ -225,9 +228,9 @@ Workflow:
      "generatedAt": "<ISO timestamp>",
      "items": [
        {
-         "contentId": "x:<tweet id> | podcast:<guid> | blog:<stable url hash if known>",
-         "sourceType": "x | podcast | blog",
-         "sourceName": "<X, podcast name, or blog name>",
+         "contentId": "x:<tweet id> | podcast:<guid> | blog:<stable url hash if known> | discovery:<stable hash or source id>",
+         "sourceType": "x | podcast | blog | discovery",
+         "sourceName": "<X, podcast name, blog name, or discovery source name>",
          "authorName": "<builder or author name>",
          "authorHandle": "<X handle if any>",
          "title": "<human-readable title>",
@@ -243,11 +246,17 @@ Workflow:
          "likes": 0,
          "retweets": 0,
          "replies": 0,
-         "rawSourceKey": "<tweet id, podcast guid, or blog URL>"
+         "rawSourceKey": "<tweet id, podcast guid, blog URL, or discovery rawSourceKey>"
        }
      ],
      "presentationHints": { "weeklyThemes": [], "highlightContentIds": [] }
    }
+
+Discovery workbook rules:
+- Only selected discovery items should appear in items.
+- For sourceType "discovery", use contentId "discovery:<stable hash or source id>".
+- For discovery items, set contentId to "discovery:" plus a stable source id or normalized URL hash.
+- Preserve sourceKind context in topics or keyPoints when helpful, but keep sourceType exactly "discovery".
 
 Constraints:
 - Do not install packages, run npm install, run npm ci, edit repository files, or change user config.
