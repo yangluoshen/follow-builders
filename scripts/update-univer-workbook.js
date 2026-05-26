@@ -206,6 +206,11 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
   const payload = ${JSON.stringify(payload)};
   const DISPLAY_HEADER_ROW = 14;
   const DISPLAY_DATA_ROW = DISPLAY_HEADER_ROW + 1;
+  const DASHBOARD_CLEAR_ROWS = 14;
+  const TABLE_CLEAR_EXTRA_ROWS = 160;
+  const COLORS = {
+    title: '#102033', titleSoft: '#1E3A5F', x: '#2563EB', podcast: '#7C3AED', blog: '#F59E0B', green: '#16A34A', greenSoft: '#DCFCE7', yellowSoft: '#FEF3C7', redSoft: '#FEE2E2', sheet: '#F6F8FB', card: '#FFFFFF', border: '#E2E8F0', text: '#111827', muted: '#64748B', tableHeader: '#1F4E79', tableAlt: '#F8FBFF'
+  };
 
   function stringValue(value) {
     if (value === null || value === undefined) return '';
@@ -365,59 +370,192 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       ]);
   }
 
+  function sourceTypeFromDisplayType(value) {
+    const normalized = stringValue(value).toLowerCase();
+    if (normalized === 'x') return 'x';
+    if (normalized === 'podcast') return 'podcast';
+    if (normalized === 'blog') return 'blog';
+    return normalized;
+  }
+
+  function shortDate(dateText) {
+    const parts = stringValue(dateText).split('-');
+    if (parts.length !== 3) return stringValue(dateText);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[Number(parts[1]) - 1] || parts[1];
+    return month + ' ' + Number(parts[2]);
+  }
+
+  function humanDateRange() {
+    if (!payload.weekStartDate || !payload.weekEndDate) return payload.sheetNames.week;
+    return shortDate(payload.weekStartDate) + ' - ' + shortDate(payload.weekEndDate);
+  }
+
+  function truncateText(value, maxLength) {
+    const text = stringValue(value).replace(/\\s+/g, ' ').trim();
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength - 1) + '…';
+  }
+
+  function countBySource(rows) {
+    const counts = { x: 0, podcast: 0, blog: 0 };
+    rows.forEach(row => {
+      const source = sourceTypeFromDisplayType(row[1]);
+      if (Object.prototype.hasOwnProperty.call(counts, source)) counts[source] += 1;
+    });
+    return counts;
+  }
+
+  function numericScores(rows) {
+    return rows
+      .map(row => Number(row[7]))
+      .filter(value => Number.isFinite(value));
+  }
+
+  function topRow(rows, predicate) {
+    const candidates = predicate ? rows.filter(predicate) : rows;
+    return [...candidates].sort((a, b) => Number(b[7] || 0) - Number(a[7] || 0))[0] || null;
+  }
+
+  function highlightSummary(row) {
+    if (!row) return ['No items yet', 'Waiting for the next digest update.'];
+    return [
+      truncateText(row[3], 88),
+      truncateText(row[4] || row[5] || row[8], 150)
+    ];
+  }
+
+  function scoreFill(score) {
+    const value = Number(score);
+    if (!Number.isFinite(value)) return COLORS.card;
+    if (value >= 85) return COLORS.greenSoft;
+    if (value >= 60) return COLORS.yellowSoft;
+    return COLORS.redSoft;
+  }
+
+  function sourceAccent(displayType) {
+    const source = sourceTypeFromDisplayType(displayType);
+    if (source === 'x') return COLORS.x;
+    if (source === 'podcast') return COLORS.podcast;
+    if (source === 'blog') return COLORS.blog;
+    return COLORS.muted;
+  }
+
+  function applyRangeBox(range, backgroundColor, fontColor) {
+    range
+      .setBackgroundColor(backgroundColor)
+      .setFontColor(fontColor)
+      .setVerticalAlignment('middle')
+      .setHorizontalAlignment('left');
+  }
+
   function renderWeeklySheet(sheet, inserted, updated, rows) {
     const headers = payload.weekHeaders;
+    const counts = countBySource(rows);
+    const scores = numericScores(rows);
+    const averageScore = scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : '';
+    const topScore = scores.length ? Math.max(...scores) : '';
+    const topX = topRow(rows, row => sourceTypeFromDisplayType(row[1]) === 'x');
+    const topPodcast = topRow(rows, row => sourceTypeFromDisplayType(row[1]) === 'podcast');
+    const highest = topRow(rows);
+
     sheet.setHiddenGridlines(true);
     sheet.setFrozenRows(15);
     sheet.setFrozenColumns(2);
 
-    sheet.getRange(0, 0, 13, headers.length).clearContent();
-    sheet.getRange(0, 0).setValue(payload.sheetNames.week + ' Follow Builders');
-    sheet
-      .getRange(0, 0, 1, headers.length)
-      .setFontWeight('bold')
-      .setFontSize(18)
-      .setFontColor('#0F172A')
-      .setBackgroundColor('#EAF2F8');
+    sheet.getRange(0, 0, DASHBOARD_CLEAR_ROWS, headers.length).clear();
+    const clearRows = Math.max(sheet.getLastRow() - DISPLAY_DATA_ROW + 1, rows.length + TABLE_CLEAR_EXTRA_ROWS, 1);
+    sheet.getRange(DISPLAY_DATA_ROW, 0, clearRows, headers.length).clearContent();
 
-    sheet.getRange(1, 0, 7, 2).setValues([
-      ['Generated at', payload.runRecord.finishedAt],
-      ['Items this week', rows.length],
-      ['Inserted raw rows', inserted],
-      ['Updated raw rows', updated],
-      ['Public URL', payload.runRecord.publicUrl],
-      ['Run ID', payload.runRecord.runId],
-      ['Source order', 'X, Podcast, Blog']
-    ]);
-    sheet
-      .getRange(1, 0, 7, 2)
-      .setBackgroundColor('#F8FAFC')
-      .setVerticalAlignment('middle');
-    sheet.getRange(1, 0, 7, 1).setFontWeight('bold').setFontColor('#334155');
+    sheet.getRange('A1:J1').merge({ isForceMerge: true });
+    sheet.getRange('A1').setValue(payload.sheetNames.week + ' Follow Builders');
+    applyRangeBox(sheet.getRange('A1:J1'), COLORS.title, '#FFFFFF');
+    sheet.getRange('A1:J1').setFontWeight('bold').setFontSize(22);
+
+    sheet.getRange('A2:J2').merge({ isForceMerge: true });
+    sheet.getRange('A2').setValue(humanDateRange() + ' · Generated ' + payload.runRecord.finishedAt + ' · ' + (payload.runRecord.publicUrl || 'Local workbook'));
+    sheet.getRange('A2:J2').setBackgroundColor('#EAF2F8').setFontColor(COLORS.text).setVerticalAlignment('middle');
+
+    sheet.getRange('A5:B5').merge({ isForceMerge: true }).setValue(rows.length);
+    sheet.getRange('C5:D5').merge({ isForceMerge: true }).setValue(counts.x);
+    sheet.getRange('E5:F5').merge({ isForceMerge: true }).setValue(counts.podcast);
+    sheet.getRange('G5:H5').merge({ isForceMerge: true }).setValue(counts.blog);
+    sheet.getRange('I5:J5').merge({ isForceMerge: true }).setValue(averageScore === '' ? '—' : averageScore);
+    [
+      ['A5:B5', COLORS.titleSoft],
+      ['C5:D5', COLORS.x],
+      ['E5:F5', COLORS.podcast],
+      ['G5:H5', COLORS.blog],
+      ['I5:J5', COLORS.green]
+    ].forEach(([a1, color]) => {
+      sheet.getRange(a1).setBackgroundColor(color).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(18).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    });
+    sheet.getRange('A4').setValue('Items');
+    sheet.getRange('C4').setValue('X');
+    sheet.getRange('E4').setValue('Podcast');
+    sheet.getRange('G4').setValue('Blog');
+    sheet.getRange('I4').setValue('Avg Score');
+
+    const topXSummary = highlightSummary(topX);
+    const podcastSummary = highlightSummary(topPodcast);
+    const highSummary = highlightSummary(highest);
+    sheet.getRange('A7:C7').merge({ isForceMerge: true }).setValue('Top X');
+    sheet.getRange('D7:F7').merge({ isForceMerge: true }).setValue('Top Podcast');
+    sheet.getRange('G7:J7').merge({ isForceMerge: true }).setValue('Highest Score' + (topScore === '' ? '' : ' · ' + topScore));
+    sheet.getRange('A8:C8').merge({ isForceMerge: true }).setValue(topXSummary[0]);
+    sheet.getRange('D8:F8').merge({ isForceMerge: true }).setValue(podcastSummary[0]);
+    sheet.getRange('G8:J8').merge({ isForceMerge: true }).setValue(highSummary[0]);
+    sheet.getRange('A9:C10').merge({ isForceMerge: true }).setValue(topXSummary[1]);
+    sheet.getRange('D9:F10').merge({ isForceMerge: true }).setValue(podcastSummary[1]);
+    sheet.getRange('G9:J10').merge({ isForceMerge: true }).setValue(highSummary[1]);
+    [
+      ['A7:C10', COLORS.x],
+      ['D7:F10', COLORS.podcast],
+      ['G7:J10', COLORS.green]
+    ].forEach(([a1, color]) => {
+      sheet.getRange(a1).setBackgroundColor(COLORS.card).setFontColor(COLORS.text).setVerticalAlignment('top').setWrap(true);
+      sheet.getRange(a1.split(':')[0]).setFontColor(color).setFontWeight('bold');
+    });
+
+    sheet.getRange('A12:J13').merge({ isForceMerge: true }).setValue('Daily Digest');
+    sheet.getRange('A12:J13').setBackgroundColor(COLORS.sheet).setFontColor(COLORS.text).setFontWeight('bold').setFontSize(16).setVerticalAlignment('middle');
 
     sheet.getRange(DISPLAY_HEADER_ROW, 0, 1, headers.length).setValues([headers]);
     sheet
       .getRange(DISPLAY_HEADER_ROW, 0, 1, headers.length)
       .setFontWeight('bold')
       .setFontColor('#FFFFFF')
-      .setBackgroundColor('#1F4E79')
-      .setVerticalAlignment('middle');
+      .setBackgroundColor(COLORS.tableHeader)
+      .setVerticalAlignment('middle')
+      .setHorizontalAlignment('left');
 
-    const clearRows = Math.max(sheet.getLastRow() - DISPLAY_DATA_ROW + 1, rows.length, 1);
-    sheet.getRange(DISPLAY_DATA_ROW, 0, clearRows, headers.length).clearContent();
     if (rows.length > 0) {
       sheet.getRange(DISPLAY_DATA_ROW, 0, rows.length, headers.length).setValues(rows);
-      sheet
-        .getRange(DISPLAY_DATA_ROW, 0, rows.length, headers.length)
-        .setVerticalAlignment('top')
-        .setHorizontalAlignment('left');
-      sheet.setRowHeights(DISPLAY_DATA_ROW, rows.length, 76);
+      sheet.getRange(DISPLAY_DATA_ROW, 0, rows.length, headers.length).setVerticalAlignment('top').setHorizontalAlignment('left').setWrap(true);
+      sheet.setRowHeights(DISPLAY_DATA_ROW, rows.length, 96);
+      rows.forEach((row, index) => {
+        const targetRow = DISPLAY_DATA_ROW + index;
+        const rowFill = index % 2 === 0 ? COLORS.tableAlt : COLORS.card;
+        sheet.getRange(targetRow, 0, 1, headers.length).setBackgroundColor(rowFill);
+        sheet.getRange(targetRow, 1).setFontColor(sourceAccent(row[1])).setFontWeight('bold');
+        sheet.getRange(targetRow, 7).setBackgroundColor(scoreFill(row[7])).setFontWeight('bold').setHorizontalAlignment('center');
+      });
     }
 
-    const widths = [110, 90, 160, 280, 360, 320, 180, 80, 300, 180];
+    const widths = [104, 88, 150, 300, 430, 360, 170, 86, 330, 190];
     widths.forEach((width, index) => sheet.setColumnWidth(index, width));
     sheet.setRowHeight(0, 34);
-    sheet.setRowHeight(DISPLAY_HEADER_ROW, 30);
+    sheet.setRowHeight(1, 28);
+    sheet.setRowHeight(2, 26);
+    sheet.setRowHeight(3, 44);
+    sheet.setRowHeight(4, 44);
+    sheet.setRowHeight(6, 24);
+    sheet.setRowHeight(7, 34);
+    sheet.setRowHeight(8, 46);
+    sheet.setRowHeight(9, 46);
+    sheet.setRowHeight(11, 30);
+    sheet.setRowHeight(12, 30);
+    sheet.setRowHeight(DISPLAY_HEADER_ROW, 32);
   }
 
   try {

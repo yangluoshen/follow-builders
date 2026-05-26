@@ -486,6 +486,22 @@ class FakeRange {
   setWrap(value) { return this.record('setWrap', value); }
 }
 
+function a1ToIndexes(a1) {
+  const match = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(a1);
+  if (!match) throw new Error(`Unsupported fake A1 range: ${a1}`);
+  const col = text => text.split('').reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0) - 1;
+  const startColumn = col(match[1]);
+  const startRow = Number(match[2]) - 1;
+  const endColumn = match[3] ? col(match[3]) : startColumn;
+  const endRow = match[4] ? Number(match[4]) - 1 : startRow;
+  return {
+    row: startRow,
+    column: startColumn,
+    rowCount: endRow - startRow + 1,
+    columnCount: endColumn - startColumn + 1
+  };
+}
+
 class FakeSheet {
   constructor(name) {
     this.name = name;
@@ -515,6 +531,10 @@ class FakeSheet {
   }
 
   getRange(row, column, rowCount = 1, columnCount = 1) {
+    if (typeof row === 'string') {
+      const parsed = a1ToIndexes(row);
+      return new FakeRange(this, parsed.row, parsed.column, parsed.rowCount, parsed.columnCount);
+    }
     return new FakeRange(this, row, column, rowCount, columnCount);
   }
 
