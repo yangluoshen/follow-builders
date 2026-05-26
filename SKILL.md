@@ -186,6 +186,12 @@ cat > ~/.follow-builders/config.json << 'CFGEOF'
     "fallbackToRaw": false,
     "codexSandbox": "workspace-write"
   },
+  "univer": {
+    "enabled": true,
+    "workbookPath": "~/.follow-builders/follow-builders.univer",
+    "unitId": "",
+    "publicUrl": ""
+  },
   "onboardingComplete": true
 }
 CFGEOF
@@ -326,6 +332,57 @@ Then add the appropriate closing line based on their setup:
 
 Wait for their response and apply any feedback (update config.json or prompt files
 as needed). Then confirm the changes.
+
+---
+
+## Univer Workbook Output
+
+Markdown remains the primary delivery format, especially for Telegram and chat
+delivery. The Univer workbook is a long-lived history and review layer that
+accumulates past digest items over time.
+
+### Template and Initialization
+
+The repo template path is `templates/follow-builders.univer`. It must be
+scaffolded with `raw-data`, `runs`, and `_week-template`, locally committed with
+`univer commit`, and not synced. Do not mutate or sync the repo template during
+daily digest runs.
+
+For user initialization, run:
+```bash
+cd ${CLAUDE_SKILL_DIR}/scripts && node init-univer-workbook.js
+```
+
+The init script copies `templates/follow-builders.univer` to
+`~/.follow-builders/follow-builders.univer`, runs `univer sync`, then stores
+`univer.unitId` and the public URL
+`https://univer.ai/space/sheets/<unit-id>` in `~/.follow-builders/config.json`.
+
+### Workbook Contract
+
+- `raw-data` is the only fact table. It is append-oriented and keyed by
+  `contentId`.
+- `runs` is append-only and records each digest/workbook update run.
+- Weekly sheets are display layers named by ISO week, such as `2026-W22`.
+- Daily updates may edit existing `raw-data` rows, append new `runs` rows, and
+  update the current weekly sheet's display area and helper summary values.
+- Daily updates must not change `raw-data` header order, `runs` header order,
+  weekly top layout anchors, chart anchors, formula-zone structure, or the repo
+  template workbook.
+
+### Sorting and Deduplication
+
+Store one row per X tweet, podcast episode, or blog article. Use stable IDs:
+`x:<tweetId>`, `podcast:<guid>`, and `blog:<normalized-url-hash>`. Weekly display
+rows sort by date newest first; within the same day, source order is
+`X -> Podcast -> Blog`.
+
+### Failure Behavior
+
+Workbook update or sync failure must not block Markdown delivery. If sync fails,
+keep the local workbook mutation and let the next run retry. If an old
+`univer.publicUrl` exists, it may still be appended to the Markdown digest, but
+logs must mention that the remote workbook may not include the latest data.
 
 ---
 

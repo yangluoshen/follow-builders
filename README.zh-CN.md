@@ -114,6 +114,20 @@ prompts 重新混编摘要，把日志写入 `~/.follow-builders/logs/`，然后
 `--codex-sandbox danger-full-access`。只有在明确配置 raw 模式时才应使用
 原始 cron 推送，因为它可能发送结构化 JSON，而不是可读摘要。
 
+## Univer 工作簿历史
+
+Follow Builders 可以在 Markdown 摘要之外维护一个本地 Univer 工作簿。
+Markdown 仍然是适合 Telegram 推送的主要输出，工作簿用于保存长期历史，
+方便回顾。
+
+本地工作簿路径是 `~/.follow-builders/follow-builders.univer`，包含
+`raw-data`、`runs` 和每周回顾工作表。设置时会复制
+`templates/follow-builders.univer`，运行 `univer sync`，并把公开 URL
+`https://univer.ai/space/sheets/<unit-id>` 保存到本地配置中。
+
+每日运行会更新本地工作簿并同步。如果工作簿更新或同步失败，Markdown
+推送仍会继续。
+
 ## 系统要求
 
 - 一个 AI agent（OpenClaw、Claude Code 或类似工具）

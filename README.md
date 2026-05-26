@@ -122,6 +122,20 @@ If Codex's default sandbox blocks network access for `prepare-digest.js`, use
 Raw cron delivery should only be used when explicitly configured because it may
 send structured JSON instead of a readable digest.
 
+## Univer Workbook History
+
+Follow Builders can maintain a local Univer workbook alongside the Markdown
+digest. Markdown remains the Telegram-friendly primary output, while the
+workbook keeps long-lived history for review.
+
+The local workbook lives at `~/.follow-builders/follow-builders.univer` and uses
+`raw-data`, `runs`, and weekly review sheets. Setup copies
+`templates/follow-builders.univer`, runs `univer sync`, and stores the public URL
+`https://univer.ai/space/sheets/<unit-id>` in the local config.
+
+Daily runs update the local workbook and sync it. If the workbook update or sync
+fails, Markdown delivery continues.
+
 ## Requirements
 
 - An AI agent (OpenClaw, Claude Code, or similar)
