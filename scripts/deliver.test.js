@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { createServer } from 'node:http';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -44,6 +44,30 @@ globalThis.fetch = async function fetchWithMockedTelegram(input, init) {
 };
 `);
   return preloadPath;
+}
+
+async function writeFastDelayPreload(home) {
+  const delayCountPath = join(home, '.follow-builders', 'delay-count.txt');
+  const preloadPath = join(home, '.follow-builders', 'fast-delay.cjs');
+  await writeUserFile(home, 'fast-delay.cjs', `
+const { writeFileSync } = require('node:fs');
+const delayCountPath = ${JSON.stringify(delayCountPath)};
+const originalSetTimeout = globalThis.setTimeout;
+let delayCount = 0;
+
+globalThis.setTimeout = function setTimeoutWithFastDeliveryDelay(callback, delay, ...args) {
+  if (delay === 500) {
+    delayCount += 1;
+    return originalSetTimeout(callback, 0, ...args);
+  }
+  return originalSetTimeout(callback, delay, ...args);
+};
+
+process.on('exit', () => {
+  writeFileSync(delayCountPath, String(delayCount));
+});
+`);
+  return { preloadPath, delayCountPath };
 }
 
 async function runDeliver({
@@ -194,6 +218,32 @@ test('discord target splits long markdown into multiple webhook posts', async t 
   }
 });
 
+test('discord chunk delay happens only between chunks', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  const server = await withJsonServer(({ res }) => {
+    res.statusCode = 204;
+    res.end();
+  });
+  t.after(() => server.close());
+
+  await writeConfig(home, { delivery: { targets: [{ method: 'discord' }] } });
+  await writeEnv(home, `DISCORD_WEBHOOK_URL=${server.url}\n`);
+  const { preloadPath, delayCountPath } = await writeFastDelayPreload(home);
+
+  const longMessage = `${'a'.repeat(1800)}\n${'b'.repeat(1800)}\n${'c'.repeat(1800)}`;
+  const result = await runDeliver({
+    home,
+    message: longMessage,
+    preloadModules: [preloadPath]
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(server.requests.length, 3);
+  assert.equal(await readFile(delayCountPath, 'utf-8'), '2');
+});
+
 test('legacy telegram delivery still works', async t => {
   const home = await makeTempHome();
   t.after(() => rm(home, { recursive: true, force: true }));
@@ -224,6 +274,36 @@ test('legacy telegram delivery still works', async t => {
   assert.equal(server.requests[0].body.chat_id, 'chat-123');
   assert.equal(server.requests[0].body.text, 'Legacy Telegram digest');
   assert.match(result.stdout, /"method":"telegram"/);
+});
+
+test('telegram chunk delay happens only between chunks', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  const server = await withJsonServer(({ res }) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ ok: true, result: {} }));
+  });
+  t.after(() => server.close());
+
+  await writeConfig(home, { delivery: { method: 'telegram', chatId: 'chat-123' } });
+  await writeEnv(home, 'TELEGRAM_BOT_TOKEN=test-token\n');
+  const telegramApiBase = server.url.replace('/webhook', '');
+  const { preloadPath, delayCountPath } = await writeFastDelayPreload(home);
+
+  const longMessage = `${'a'.repeat(3900)}\n${'b'.repeat(3900)}`;
+  const result = await runDeliver({
+    home,
+    message: longMessage,
+    preloadModules: [preloadPath],
+    extraEnv: {
+      FOLLOW_BUILDERS_TELEGRAM_API_BASE: telegramApiBase
+    }
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(server.requests.length, 2);
+  assert.equal(await readFile(delayCountPath, 'utf-8'), '1');
 });
 
 test('one target failure does not block later targets and exits non-zero', async t => {
@@ -264,6 +344,38 @@ test('one target failure does not block later targets and exits non-zero', async
   assert.equal(summary.results[0].status, 'error');
   assert.match(summary.results[0].message, /DISCORD_WEBHOOK_URL not found/);
   assert.equal(summary.results[1].status, 'ok');
+});
+
+test('mixed stdout target returns JSON-only summary without printing digest', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  const server = await withJsonServer(({ res }) => {
+    res.statusCode = 204;
+    res.end();
+  });
+  t.after(() => server.close());
+
+  await writeConfig(home, {
+    delivery: {
+      targets: [
+        { method: 'stdout' },
+        { method: 'discord' }
+      ]
+    }
+  });
+  await writeEnv(home, `DISCORD_WEBHOOK_URL=${server.url}\n`);
+
+  const result = await runDeliver({ home, message: 'Mixed delivery digest' });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(server.requests.length, 1);
+  assert.doesNotMatch(result.stdout, /^Mixed delivery digest\n/);
+
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'ok');
+  assert.deepEqual(summary.results.map(item => item.method), ['stdout', 'discord']);
+  assert.deepEqual(summary.results.map(item => item.status), ['ok', 'ok']);
 });
 
 test('stdout default still prints only the digest text', async t => {

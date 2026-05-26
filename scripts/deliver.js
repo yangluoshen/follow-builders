@@ -133,7 +133,8 @@ async function sendTelegram(text, botToken, chatId) {
     });
   }
 
-  for (const chunk of chunks) {
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
     const res = await postTelegramMessage(chunk, true);
 
     if (!res.ok) {
@@ -152,7 +153,7 @@ async function sendTelegram(text, botToken, chatId) {
     }
 
     // Small delay between chunks to avoid rate limiting.
-    if (chunks.length > 1) await sleep(500);
+    if (i < chunks.length - 1) await sleep(500);
   }
 }
 
@@ -161,7 +162,8 @@ async function sendTelegram(text, botToken, chatId) {
 async function sendDiscord(text, webhookUrl) {
   const chunks = splitMessage(text, 1900);
 
-  for (const chunk of chunks) {
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -176,7 +178,7 @@ async function sendDiscord(text, webhookUrl) {
       throw new Error(`Discord webhook error: ${err.message || JSON.stringify(err)}`);
     }
 
-    if (chunks.length > 1) await sleep(500);
+    if (i < chunks.length - 1) await sleep(500);
   }
 }
 
@@ -207,7 +209,9 @@ async function sendEmail(text, apiKey, toEmail) {
   }
 }
 
-async function sendTarget(target, digestText) {
+async function sendTarget(target, digestText, options = {}) {
+  const { printStdout = true } = options;
+
   switch (target.method) {
     case 'discord': {
       const webhookUrl = target.webhookUrl || process.env.DISCORD_WEBHOOK_URL;
@@ -248,7 +252,7 @@ async function sendTarget(target, digestText) {
 
     case 'stdout':
     default:
-      console.log(digestText);
+      if (printStdout) console.log(digestText);
       return {
         status: 'ok',
         method: 'stdout',
@@ -286,7 +290,7 @@ async function main() {
   const results = [];
   for (const target of targets) {
     try {
-      results.push(await sendTarget(target, digestText));
+      results.push(await sendTarget(target, digestText, { printStdout: false }));
     } catch (err) {
       results.push({
         status: 'error',
