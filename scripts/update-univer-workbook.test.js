@@ -196,6 +196,8 @@ test('updates configured workbook and syncs it', async t => {
   });
 
   const loggedCalls = (await readFile(calls, 'utf-8')).trim().split('\n');
+  assert.ok(!loggedCalls.includes(`new ${workbookPath}`));
+  assert.ok(!loggedCalls.some(call => call.includes('univer-template-scaffold.js')));
   assert.equal(loggedCalls[0], `inspect workbook ${workbookPath}`);
   assert.match(loggedCalls[1], new RegExp(`^run ${workbookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} --file .+update-workbook\\.js$`));
   assert.equal(loggedCalls[2], `inspect range ${workbookPath} --range raw-data!A1:T5`);
