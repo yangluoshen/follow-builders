@@ -183,3 +183,23 @@ test('rejects option flags without values before home side effects', async t => 
   assert.match(result.stderr + result.stdout, /--home requires a value/);
   assert.equal(await pathExists(join(guardHome, '.follow-builders')), false);
 });
+
+test('rejects single-dash flag-like option values before config work', async t => {
+  const guardHome = await mkdtemp(join(tmpdir(), 'fb-update-guard-home-'));
+  t.after(() => rm(guardHome, { recursive: true, force: true }));
+
+  await mkdir(join(guardHome, '.follow-builders'), { recursive: true });
+  await writeFile(join(guardHome, '.follow-builders', 'config.json'), '{not json', 'utf-8');
+
+  const result = spawnSync(process.execPath, [
+    UPDATE,
+    '--items-json', '-x'
+  ], {
+    encoding: 'utf-8',
+    env: { ...process.env, HOME: guardHome }
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /--items-json requires a value/);
+  assert.doesNotMatch(result.stderr + result.stdout, /Could not read config/);
+});
