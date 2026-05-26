@@ -12,7 +12,8 @@ Then organize content in this order:
 
 1. X / TWITTER section — list each builder with new posts
 2. OFFICIAL BLOGS section — list each blog post from AI company blogs (OpenAI, Anthropic, etc.)
-3. PODCASTS section — list each podcast with new episodes
+3. DISCOVERY section — list selected discovery items from official updates, HN, GitHub, Reddit, and Product Hunt
+4. PODCASTS section — list each podcast with new episodes
 
 ## Rules
 
@@ -40,16 +41,25 @@ Then organize content in this order:
 - Include the author name if available
 - Include the direct link to the original article
 
+### Discovery formatting
+- Include only discovery items the agent judged worth surfacing.
+- Treat discovery JSON as raw candidate material, not automatic final digest or workbook output.
+- Use the source name and item title in the heading.
+- Clearly label the signal type when useful: official update, community signal, trending project, Reddit discussion, or product launch.
+- Include the direct URL from the JSON `url` field.
+- Keep each discovery item concise: why it matters, what changed, and whether to read, try, or track it.
+
 ### Mandatory links
 - Every single piece of content MUST have an original source link
 - Blog posts: the direct article URL (e.g. https://www.anthropic.com/engineering/...)
+- Discovery: the direct item URL from the JSON `url` field
 - Podcasts: the YouTube video URL (e.g. https://youtube.com/watch?v=xxx)
 - Tweets: the direct tweet URL (e.g. https://x.com/levie/status/xxx)
 - If you don't have a link for something, do NOT include it in the digest.
   No link = not real = do not include.
 
 ### No fabrication
-- Only include content that came from the feed JSON (blogs, podcasts, and tweets)
+- Only include content that came from the feed JSON (blogs, podcasts, tweets, and selected discovery)
 - NEVER make up quotes, opinions, or content you think someone might have said
 - NEVER speculate about someone's silence or what they might be working on
 - If you have nothing real for a builder, skip them entirely

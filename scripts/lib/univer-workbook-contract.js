@@ -65,13 +65,15 @@ export const WEEK_DISPLAY_HEADERS = Object.freeze([
 const SOURCE_LABELS = Object.freeze({
   x: 'X',
   podcast: 'Podcast',
-  blog: 'Blog'
+  blog: 'Blog',
+  discovery: 'Discovery'
 });
 
 const SOURCE_ORDER = Object.freeze({
   x: 0,
   podcast: 1,
-  blog: 2
+  blog: 2,
+  discovery: 3
 });
 
 export function normalizeBlogUrl(url) {
@@ -90,6 +92,10 @@ export function buildContentId(item) {
   if (item.sourceType === 'podcast' && item.guid) return `podcast:${item.guid}`;
   if (item.sourceType === 'blog' && item.url) {
     return `blog:${createHash('sha256').update(normalizeBlogUrl(item.url)).digest('hex').slice(0, 12)}`;
+  }
+  if (item.sourceType === 'discovery' && (item.rawSourceKey || item.url)) {
+    const identity = item.rawSourceKey || normalizeBlogUrl(item.url);
+    return `discovery:${createHash('sha256').update(identity).digest('hex').slice(0, 12)}`;
   }
   throw new Error('Cannot build contentId: unsupported item identity');
 }
@@ -117,7 +123,8 @@ function requireContentIdForSource(item, index) {
   const requiredPrefix = {
     x: 'x:',
     podcast: 'podcast:',
-    blog: 'blog:'
+    blog: 'blog:',
+    discovery: 'discovery:'
   }[item.sourceType];
   if (requiredPrefix && !item.contentId.startsWith(requiredPrefix)) {
     throw new Error(`items[${index}].contentId must start with ${requiredPrefix}`);
@@ -138,8 +145,8 @@ export function validateItemsPayload(payload) {
     requireString(item.title, `items[${index}].title`);
     requireString(item.url, `items[${index}].url`);
     requireDateOnly(item.runDate, `items[${index}].runDate`);
-    if (!['x', 'podcast', 'blog'].includes(item.sourceType)) {
-      throw new Error(`items[${index}].sourceType must be x, podcast, or blog`);
+    if (!['x', 'podcast', 'blog', 'discovery'].includes(item.sourceType)) {
+      throw new Error(`items[${index}].sourceType must be x, podcast, blog, or discovery`);
     }
     requireContentIdForSource(item, index);
   });

@@ -47,6 +47,100 @@
       "fetchMethod": "http"
     }
   ],
+  "discovery_sources": [
+    {
+      "name": "OpenAI News",
+      "kind": "official",
+      "type": "rss",
+      "url": "https://openai.com/news/rss.xml",
+      "maxItems": 3
+    },
+    {
+      "name": "Google DeepMind Blog",
+      "kind": "official",
+      "type": "rss",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "maxItems": 3
+    },
+    {
+      "name": "Hugging Face Blog",
+      "kind": "official",
+      "type": "rss",
+      "url": "https://huggingface.co/blog/feed.xml",
+      "maxItems": 3
+    },
+    {
+      "name": "Anthropic API Release Notes",
+      "kind": "official",
+      "type": "html_release_notes",
+      "url": "https://docs.anthropic.com/en/release-notes/api",
+      "maxItems": 1
+    },
+    {
+      "name": "Anthropic Claude Code Release Notes",
+      "kind": "official",
+      "type": "html_release_notes",
+      "url": "https://docs.anthropic.com/en/release-notes/claude-code",
+      "maxItems": 1
+    },
+    {
+      "name": "Anthropic Claude Apps Release Notes",
+      "kind": "official",
+      "type": "html_release_notes",
+      "url": "https://docs.anthropic.com/en/release-notes/claude-apps",
+      "maxItems": 1
+    },
+    {
+      "name": "HN Top Stories",
+      "kind": "hn",
+      "type": "hn_top",
+      "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+      "maxItems": 3,
+      "inspectItems": 30
+    },
+    {
+      "name": "HN Algolia AI",
+      "kind": "hn",
+      "type": "hn_algolia",
+      "url": "https://hn.algolia.com/api/v1/search_by_date?query=AI&tags=story",
+      "maxItems": 3
+    },
+    {
+      "name": "HN Algolia LLM",
+      "kind": "hn",
+      "type": "hn_algolia",
+      "url": "https://hn.algolia.com/api/v1/search_by_date?query=LLM&tags=story",
+      "maxItems": 3
+    },
+    {
+      "name": "GitHub Trending Daily",
+      "kind": "github_trending",
+      "type": "github_trending",
+      "url": "https://github.com/trending?since=daily",
+      "maxItems": 5
+    },
+    {
+      "name": "r/AI_Agents",
+      "kind": "reddit",
+      "type": "atom",
+      "url": "https://www.reddit.com/r/AI_Agents/top/.rss?t=week",
+      "maxItems": 3
+    },
+    {
+      "name": "Product Hunt AI Featured",
+      "kind": "producthunt",
+      "type": "atom",
+      "url": "https://www.producthunt.com/feed?category=artificial-intelligence",
+      "maxItems": 3
+    },
+    {
+      "name": "Product Hunt Developer Tools",
+      "kind": "producthunt",
+      "type": "atom",
+      "url": "https://www.producthunt.com/feed?category=developer-tools",
+      "maxItems": 3
+    }
+  ],
   "x_accounts": [
     { "name": "Andrej Karpathy", "handle": "karpathy" },
     { "name": "Swyx", "handle": "swyx" },

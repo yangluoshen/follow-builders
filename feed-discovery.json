@@ -1,0 +1,159 @@
+{
+  "generatedAt": "2026-05-26T15:09:35.663Z",
+  "lookbackHours": 72,
+  "discovery": [
+    {
+      "source": "discovery",
+      "sourceKind": "hn",
+      "sourceName": "HN Algolia AI",
+      "title": "MCP: Security Design Considerations for AI-Driven Automation by NSA [pdf]",
+      "url": "https://www.nsa.gov/Portals/75/documents/Cybersecurity/CSI_MCP_SECURITY.pdf",
+      "publishedAt": "2026-05-26T15:04:10.000Z",
+      "author": "myworkaccount2",
+      "summary": "MCP: Security Design Considerations for AI-Driven Automation by NSA [pdf]",
+      "metadata": {
+        "score": 1,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "mcp"
+        ]
+      },
+      "rawSourceKey": "hn:48280824"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "reddit",
+      "sourceName": "r/AI_Agents",
+      "title": "A solo founder just raised $30M Series A and let AI agents run the fun",
+      "url": "https://www.reddit.com/r/AI_Agents/comments/1tm5n18/a_solo_founder_just_raised_30m_series_a_and_let",
+      "publishedAt": "2026-05-24T07:49:03.000Z",
+      "author": "/u/schneida_vie",
+      "summary": "Polsia just closed $30M Series A at a $250M post-money valuation. One founder, Ben Cera. Zero employees. ~$10M ARR five months after launch, 7,600 companies on the platform, 3,627 DAU, 85% month-two retention. It is now the highest valuation any truly solo company has ever crossed. Every post about this is going to lead with the 'AI agents run everything' angle. That part is real (the agents literally ran his fundraise outreach, diligence, scheduling, and data room, he only joined for term sheet signature calls), but it is also the part you can already infer from the product name. Anyone tried it so far more exentsively? &#32; submitted by &#32; /u/schneida_vie [link] &#32; [comments]",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "agent"
+        ]
+      },
+      "rawSourceKey": "t3_1tm5n18"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "reddit",
+      "sourceName": "r/AI_Agents",
+      "title": "what AI tools are actually part of your daily workflow?",
+      "url": "https://www.reddit.com/r/AI_Agents/comments/1tmlkve/what_ai_tools_are_actually_part_of_your_daily",
+      "publishedAt": "2026-05-24T19:22:22.000Z",
+      "author": "/u/Elpepestan",
+      "summary": "there’s so much AI hype right now that it’s getting hard to tell which tools people genuinely use long term vs which ones just look good on twitter for a week. curious what tools have actually stuck in your workflow and consistently saved you time or helped you produce better work. not really looking for “top 10 AI tools” lists, more interested in tools you keep coming back to every day because they’re genuinely useful. &#32; submitted by &#32; /u/Elpepestan [link] &#32; [comments]",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "agent"
+        ]
+      },
+      "rawSourceKey": "t3_1tmlkve"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt AI Featured",
+      "title": "Parrot Speech-to-text API",
+      "url": "https://www.producthunt.com/products/parrot-speech-to-text-api",
+      "publishedAt": "2026-05-25T19:49:34.000Z",
+      "author": "Parth Chadha",
+      "summary": "Fast, accurate STT for production-grade voice agents Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "agent"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1155711"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt AI Featured",
+      "title": "MiniCPM5-1B",
+      "url": "https://www.producthunt.com/products/minicpm-4-0",
+      "publishedAt": "2026-05-26T03:07:00.000Z",
+      "author": "Zac Zuo",
+      "summary": "A new SOTA for compact open models on the edge Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "llm"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1155885"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt AI Featured",
+      "title": "marpy.io",
+      "url": "https://www.producthunt.com/products/marpy-io-python-first-ai-dev-platform",
+      "publishedAt": "2026-05-24T17:10:41.000Z",
+      "author": "Seth Black",
+      "summary": "AI coding platform built specifically for the Python stack Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": []
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1154818"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt Developer Tools",
+      "title": "Ajar",
+      "url": "https://www.producthunt.com/products/ajar",
+      "publishedAt": "2026-05-25T13:29:46.000Z",
+      "author": "Lauren",
+      "summary": "Lid Angle Sync & Keep Awake for AI Agents on Mac Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "agent"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1155456"
+    },
+    {
+      "source": "discovery",
+      "sourceKind": "producthunt",
+      "sourceName": "Product Hunt Developer Tools",
+      "title": "tldx",
+      "url": "https://www.producthunt.com/products/tldx",
+      "publishedAt": "2026-05-24T14:53:43.000Z",
+      "author": "Brandon Young",
+      "summary": "Fast CLI to bulk-check domains via RDAP & MCP Discussion | Link",
+      "metadata": {
+        "score": 0,
+        "comments": 0,
+        "rank": 0,
+        "tags": [
+          "mcp"
+        ]
+      },
+      "rawSourceKey": "tag:www.producthunt.com,2005:Post/1154745"
+    }
+  ],
+  "stats": {
+    "discoveryItems": 8
+  }
+}
