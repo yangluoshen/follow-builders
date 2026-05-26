@@ -1,5 +1,11 @@
 # Univer Workbook Visual Refresh Design
 
+> Superseded by
+> `docs/superpowers/specs/2026-05-26-univer-workbook-analyst-console-design.md`.
+> The newer spec changes the selected direction from Editorial Dashboard to
+> Analyst Console and explicitly requires weekly sheets to use no frozen rows
+> or columns.
+
 > Supersession note: `_week-template` is still defined by
 > `scripts/univer-template-scaffold.js`, but the repo no longer stores a
 > checked-in `.univer` template.

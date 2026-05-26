@@ -106,7 +106,7 @@ async function createScaffoldedWorkbook({ workbookPath, scaffoldPath, univerPath
   await runUniver(['inspect', 'workbook', workbookPath], { univerPath });
   await runUniver(['inspect', 'range', workbookPath, '--range', 'raw-data!A1:T1'], { univerPath });
   await runUniver(['inspect', 'range', workbookPath, '--range', 'runs!A1:M1'], { univerPath });
-  await runUniver(['inspect', 'range', workbookPath, '--range', '_week-template!A1:J7'], { univerPath });
+  await runUniver(['inspect', 'range', workbookPath, '--range', '_week-template!A1:J12'], { univerPath });
   const commitResult = await runUniverJson(
     ['commit', workbookPath, '--message', 'Initialize follow-builders workbook'],
     { univerPath }
