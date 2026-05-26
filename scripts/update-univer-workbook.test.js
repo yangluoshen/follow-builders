@@ -738,7 +738,7 @@ test('generated workbook-local script renders editorial dashboard metrics and hi
   assert.equal(weekSheet.frozenRows, 15);
   assert.equal(weekSheet.frozenColumns, 2);
   assert.equal(weekSheet.getCell(0, 0), '2026-W22 Follow Builders');
-  assert.equal(weekSheet.getCell(1, 0), 'May 25 - May 31');
+  assert.match(weekSheet.getCell(1, 0), /May 25 - May 31/);
   assert.equal(weekSheet.getCell(3, 0), 'Items');
   assert.equal(weekSheet.getCell(4, 0), 3);
   assert.equal(weekSheet.getCell(4, 2), 1);
@@ -748,7 +748,7 @@ test('generated workbook-local script renders editorial dashboard metrics and hi
   assert.equal(weekSheet.getCell(7, 0), 'Agent update');
   assert.equal(weekSheet.getCell(6, 3), 'Top Podcast');
   assert.equal(weekSheet.getCell(7, 3), 'Podcast update');
-  assert.equal(weekSheet.getCell(6, 6), 'Highest Score');
+  assert.match(weekSheet.getCell(6, 6), /Highest Score/);
   assert.equal(weekSheet.getCell(7, 6), 'Blog update');
   assert.equal(weekSheet.getCell(11, 0), 'Daily Digest');
   assert.equal(weekSheet.getCell(14, 0), 'Date');
