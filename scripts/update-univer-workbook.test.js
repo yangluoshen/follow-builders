@@ -1013,12 +1013,9 @@ test('generated workbook-local script keeps first viewport controls, KPIs, and t
     'Source', 'All', 'Score', '0-100', 'Topic', 'All', 'Date\nWeek', 'Sort', 'Signal', 'View\nDigest'
   ]);
   assert.deepEqual(weekSheet.getRange('A4:J4').getValues()[0], [
-    'ITEMS', '', 'X', '', 'PODCAST', '', 'BLOG', '', 'MEDIAN', 'LOW SCORE'
+    'ITEMS', '', 'X', '', 'PODCAST', '', 'BLOG', '', 'DISCOVERY', ''
   ]);
-  assert.equal(cellValue(weekSheet, 4, 8), '=IF(COUNT(H12:H2000)>0,MEDIAN(H12:H2000),"-")');
-  assert.doesNotMatch(cellValue(weekSheet, 4, 8), /VALUE\(/);
-  assert.doesNotMatch(cellValue(weekSheet, 4, 8), /O:O|J:J|O2:O|J2:J/);
-  assert.equal(cellValue(weekSheet, 4, 9), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!O:O,"<50")');
+  assert.equal(cellValue(weekSheet, 4, 8), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"discovery")');
 
   const visibleWidths = Array.from({ length: 10 }, (_, index) => weekSheet.columnWidths.get(index));
   assert.deepEqual(visibleWidths, [78, 58, 118, 220, 260, 220, 120, 62, 150, 86]);
@@ -1031,6 +1028,55 @@ test('generated workbook-local script keeps first viewport controls, KPIs, and t
   assert.equal(weekSheet.getCellFormat(3, 0, 'setFontSize'), 9);
   assert.equal(weekSheet.getCellFormat(3, 0, 'setFontColor'), '#FFFFFF');
   assert.equal(weekSheet.getCellFormat(4, 0, 'setFontSize'), 18);
+});
+
+test('generated workbook-local script renders discovery source labels and dashboard count', async () => {
+  const workbook = new FakeWorkbook();
+  const discoveryItem = {
+    contentId: 'discovery:hn-1',
+    sourceType: 'discovery',
+    sourceName: 'HN Algolia LLM',
+    authorName: 'hnuser',
+    authorHandle: '',
+    title: 'LLM evals for agents',
+    url: 'https://example.com/evals',
+    publishedAt: '2026-05-26T01:00:00.000Z',
+    capturedAt: '2026-05-26T02:00:00.000Z',
+    runDate: '2026-05-26',
+    textExcerpt: 'excerpt',
+    summary: 'summary',
+    keyPoints: ['point'],
+    topics: ['agents'],
+    importanceScore: 75,
+    likes: 0,
+    retweets: 0,
+    replies: 0,
+    rawSourceKey: 'hn:1'
+  };
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(discoveryItem, '2026-05-26T02:00:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([discoveryItem]),
+    runRecord: runRecord(1, 'run-discovery'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.match(script, /dashboardFormula\('discovery'\)/);
+  assert.match(script, /source === 'discovery'/);
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  const weekSheet = workbook.getSheetByName('2026-W22');
+  assert.equal(cellValue(weekSheet, 3, 8), 'DISCOVERY');
+  assert.equal(cellValue(weekSheet, 4, 8), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"discovery")');
+  assert.equal(cellValue(weekSheet, 11, 1), '=IF(\'raw-data\'!B2="x","X",IF(\'raw-data\'!B2="podcast","Podcast",IF(\'raw-data\'!B2="blog","Blog",IF(\'raw-data\'!B2="discovery","Discovery",\'raw-data\'!B2))))');
+  assert.equal(weekSheet.getCellFormat(11, 1, 'setFontColor'), '#0F766E');
 });
 
 test('generated workbook-local script renders the weekly sheet from raw-data history', async () => {
@@ -1077,7 +1123,7 @@ test('generated workbook-local script renders the weekly sheet from raw-data his
 
   const weekSheet = workbook.getSheetByName('2026-W22');
   assert.equal(cellValue(weekSheet, 11, 0), "='raw-data'!J3");
-  assert.equal(cellValue(weekSheet, 11, 1), '=IF(\'raw-data\'!B3="x","X",IF(\'raw-data\'!B3="podcast","Podcast",IF(\'raw-data\'!B3="blog","Blog",\'raw-data\'!B3)))');
+  assert.equal(cellValue(weekSheet, 11, 1), '=IF(\'raw-data\'!B3="x","X",IF(\'raw-data\'!B3="podcast","Podcast",IF(\'raw-data\'!B3="blog","Blog",IF(\'raw-data\'!B3="discovery","Discovery",\'raw-data\'!B3))))');
   assert.equal(cellValue(weekSheet, 11, 7), '=IF(\'raw-data\'!O3="","",\'raw-data\'!O3)');
   assert.equal(cellValue(weekSheet, 11, 3), "='raw-data'!F3");
   assert.equal(cellValue(weekSheet, 12, 0), "='raw-data'!J2");
@@ -1613,12 +1659,8 @@ test('generated workbook-local script renders analyst console formulas, panels, 
   assert.equal(cellValue(weekSheet, 4, 4), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"podcast")');
   assert.equal(cellValue(weekSheet, 3, 6), 'BLOG');
   assert.equal(cellValue(weekSheet, 4, 6), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"blog")');
-  assert.equal(cellValue(weekSheet, 3, 8), 'MEDIAN');
-  assert.equal(cellValue(weekSheet, 4, 8), '=IF(COUNT(H12:H2000)>0,MEDIAN(H12:H2000),"-")');
-  assert.doesNotMatch(cellValue(weekSheet, 4, 8), /VALUE\(/);
-  assert.doesNotMatch(cellValue(weekSheet, 4, 8), /O:O|J:J|O2:O|J2:J/);
-  assert.equal(cellValue(weekSheet, 3, 9), 'LOW SCORE');
-  assert.equal(cellValue(weekSheet, 4, 9), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!O:O,"<50")');
+  assert.equal(cellValue(weekSheet, 3, 8), 'DISCOVERY');
+  assert.equal(cellValue(weekSheet, 4, 8), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!B:B,"discovery")');
 
   assert.equal(cellValue(weekSheet, 5, 0), 'TOPIC HEAT');
   assert.equal(cellValue(weekSheet, 5, 4), 'SCORE DISTRIBUTION');
@@ -1665,9 +1707,9 @@ test('generated workbook-local script renders analyst console formulas, panels, 
   });
   assert.equal(cellValue(weekSheet, 10, 0), 'Date');
   assert.equal(cellValue(weekSheet, 11, 0), "='raw-data'!J2");
-  assert.equal(cellValue(weekSheet, 11, 1), '=IF(\'raw-data\'!B2="x","X",IF(\'raw-data\'!B2="podcast","Podcast",IF(\'raw-data\'!B2="blog","Blog",\'raw-data\'!B2)))');
-  assert.equal(cellValue(weekSheet, 12, 1), '=IF(\'raw-data\'!B3="x","X",IF(\'raw-data\'!B3="podcast","Podcast",IF(\'raw-data\'!B3="blog","Blog",\'raw-data\'!B3)))');
-  assert.equal(cellValue(weekSheet, 13, 1), '=IF(\'raw-data\'!B4="x","X",IF(\'raw-data\'!B4="podcast","Podcast",IF(\'raw-data\'!B4="blog","Blog",\'raw-data\'!B4)))');
+  assert.equal(cellValue(weekSheet, 11, 1), '=IF(\'raw-data\'!B2="x","X",IF(\'raw-data\'!B2="podcast","Podcast",IF(\'raw-data\'!B2="blog","Blog",IF(\'raw-data\'!B2="discovery","Discovery",\'raw-data\'!B2))))');
+  assert.equal(cellValue(weekSheet, 12, 1), '=IF(\'raw-data\'!B3="x","X",IF(\'raw-data\'!B3="podcast","Podcast",IF(\'raw-data\'!B3="blog","Blog",IF(\'raw-data\'!B3="discovery","Discovery",\'raw-data\'!B3))))');
+  assert.equal(cellValue(weekSheet, 13, 1), '=IF(\'raw-data\'!B4="x","X",IF(\'raw-data\'!B4="podcast","Podcast",IF(\'raw-data\'!B4="blog","Blog",IF(\'raw-data\'!B4="discovery","Discovery",\'raw-data\'!B4))))');
 
   assert.equal(cellValue(weekSheet, 0, 11), 'helper');
   assert.equal(cellValue(weekSheet, 1, 11), 'score band');

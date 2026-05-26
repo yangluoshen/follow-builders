@@ -217,6 +217,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     x: '#2563EB',
     podcast: '#7C3AED',
     blog: '#F59E0B',
+    discovery: '#0F766E',
     median: '#0F766E',
     lowScore: '#DC2626',
     green: '#16A34A',
@@ -463,7 +464,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     if (!payload.weekStartDate || !payload.weekEndDate) return payload.displayRows;
     const lastRow = lastNonEmptyRowInColumn(sheet, 0, 1);
     if (lastRow < 1) return [];
-    const sourceOrder = { x: 0, podcast: 1, blog: 2 };
+    const sourceOrder = { x: 0, podcast: 1, blog: 2, discovery: 3 };
     const values = sheet.getRange(1, 0, lastRow, payload.rawHeaders.length).getValues();
     return values
       .map((row, index) => ({ row, rawRowNumber: index + 2 }))
@@ -526,7 +527,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
 
   function sourceTypeFormula(rowNumber) {
     const cell = "'raw-data'!B" + rowNumber;
-    return '=IF(' + cell + '="x","X",IF(' + cell + '="podcast","Podcast",IF(' + cell + '="blog","Blog",' + cell + ')))';
+    return '=IF(' + cell + '="x","X",IF(' + cell + '="podcast","Podcast",IF(' + cell + '="blog","Blog",IF(' + cell + '="discovery","Discovery",' + cell + '))))';
   }
 
   function sourceFormula(rowNumber) {
@@ -663,6 +664,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     if (normalized === 'x') return 'x';
     if (normalized === 'podcast') return 'podcast';
     if (normalized === 'blog') return 'blog';
+    if (normalized === 'discovery') return 'discovery';
     return normalized;
   }
 
@@ -680,7 +682,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
   }
 
   function countBySource(rows) {
-    const counts = { x: 0, podcast: 0, blog: 0 };
+    const counts = { x: 0, podcast: 0, blog: 0, discovery: 0 };
     rows.forEach(row => {
       const source = sourceTypeFromDisplayType(row[1]);
       if (Object.prototype.hasOwnProperty.call(counts, source)) counts[source] += 1;
@@ -702,6 +704,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     if (source === 'x') return COLORS.x;
     if (source === 'podcast') return COLORS.podcast;
     if (source === 'blog') return COLORS.blog;
+    if (source === 'discovery') return COLORS.discovery;
     return COLORS.muted;
   }
 
@@ -877,8 +880,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       { label: 'X', value: dashboardFormula('x') || sourceCounts.x, cardRange: 'C4:D5', labelRange: 'C4:D4', valueRange: 'C5:D5', labelCell: 'C4', valueCell: 'C5', color: COLORS.x },
       { label: 'Podcast', value: dashboardFormula('podcast') || sourceCounts.podcast, cardRange: 'E4:F5', labelRange: 'E4:F4', valueRange: 'E5:F5', labelCell: 'E4', valueCell: 'E5', color: COLORS.podcast },
       { label: 'Blog', value: dashboardFormula('blog') || sourceCounts.blog, cardRange: 'G4:H5', labelRange: 'G4:H4', valueRange: 'G5:H5', labelCell: 'G4', valueCell: 'G5', color: COLORS.blog },
-      { label: 'Median', value: medianScoreFormula() || '-', cardRange: 'I4:I5', labelRange: 'I4:I4', valueRange: 'I5:I5', labelCell: 'I4', valueCell: 'I5', color: COLORS.median },
-      { label: 'Low Score', value: lowScoreFormula() || 0, cardRange: 'J4:J5', labelRange: 'J4:J4', valueRange: 'J5:J5', labelCell: 'J4', valueCell: 'J5', color: COLORS.lowScore }
+      { label: 'Discovery', value: dashboardFormula('discovery') || sourceCounts.discovery, cardRange: 'I4:J5', labelRange: 'I4:J4', valueRange: 'I5:J5', labelCell: 'I4', valueCell: 'I5', color: COLORS.discovery }
     ];
     kpiBlocks.forEach(block => {
       if (block.labelRange.includes(':')) sheet.getRange(block.labelRange).merge({ isForceMerge: true });
