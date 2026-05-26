@@ -330,7 +330,7 @@ and send the user their first digest so they can see what it looks like.
 Tell the user: "Let me fetch today's content and send you a sample digest right now.
 This takes about a minute."
 
-Then run the full Content Delivery workflow below (Steps 1-6) right now, without
+Then run the full Content Delivery workflow below right now, without
 waiting for the cron job.
 
 After delivering the digest, ask for feedback:
