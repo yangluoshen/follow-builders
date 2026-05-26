@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { access, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { access, cp, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { constants } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
@@ -121,6 +121,39 @@ function parseJsonOutput(stdout, label) {
   } catch (err) {
     throw new Error(`Could not parse ${label} JSON output: ${err.message}`);
   }
+}
+
+function buildCommitMessage(weekSheetName, runRecord) {
+  return `follow-builders ${weekSheetName} ${runRecord.runId}`;
+}
+
+function getUncommittedMutationCount(syncResult) {
+  const value = syncResult?.uncommittedMutationCount ?? syncResult?.status?.uncommittedMutationCount;
+  if (value === undefined || value === null || value === '') return 0;
+  const count = Number(value);
+  if (!Number.isFinite(count)) {
+    throw new Error(`univer sync returned invalid uncommittedMutationCount: ${value}`);
+  }
+  return count;
+}
+
+function assertNoUncommittedMutations(syncResult) {
+  const count = getUncommittedMutationCount(syncResult);
+  if (count !== 0) {
+    throw new Error(`univer sync reported ${count} uncommitted mutations after commit`);
+  }
+}
+
+async function backupWorkbook(workbookPath, tempDir) {
+  const backupPath = join(tempDir, 'workbook-backup.univer');
+  await rm(backupPath, { recursive: true, force: true });
+  await cp(workbookPath, backupPath, { recursive: true });
+  return backupPath;
+}
+
+async function restoreWorkbook(backupPath, workbookPath) {
+  await rm(workbookPath, { recursive: true, force: true });
+  await cp(backupPath, workbookPath, { recursive: true });
 }
 
 function normalizeRows(rows, width) {
@@ -356,6 +389,7 @@ async function readItemsPayload(path) {
   const payload = validateItemsPayload(parsed);
   return {
     ...payload,
+    originalItems: payload.items,
     items: dedupeItemsByContentId(payload.items)
   };
 }
@@ -383,6 +417,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const payload = await readItemsPayload(args.itemsJsonPath);
+  const originalItemsSeen = Array.isArray(payload.originalItems) ? payload.originalItems.length : payload.items.length;
   const generatedAt = payload.generatedAt || startedAt;
   const weekSheetName = isoWeekName(generatedAt);
   const finishedAt = new Date().toISOString();
@@ -395,7 +430,7 @@ export async function main(argv = process.argv.slice(2)) {
     config,
     startedAt,
     finishedAt,
-    itemsSeen: payload.items.length
+    itemsSeen: originalItemsSeen
   });
 
   let tempDir;
@@ -405,13 +440,33 @@ export async function main(argv = process.argv.slice(2)) {
     await writeFile(runFile, buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSheetName }), 'utf-8');
 
     await runUniver(['inspect', 'workbook', workbookPath], { univerPath: args.univerPath });
-    const runOutput = await runUniver(['run', workbookPath, '--file', runFile], { univerPath: args.univerPath });
-    const runResult = parseJsonOutput(runOutput.stdout, 'univer run');
-    if (runResult.success !== true) {
-      throw new Error(`univer run failed: ${runResult.error || JSON.stringify(runResult)}`);
+    const backupPath = await backupWorkbook(workbookPath, tempDir);
+    let runResult;
+    let commitResult;
+    let committed = false;
+    try {
+      const runOutput = await runUniver(['run', workbookPath, '--file', runFile], { univerPath: args.univerPath });
+      runResult = parseJsonOutput(runOutput.stdout, 'univer run');
+      if (runResult.success !== true) {
+        throw new Error(`univer run failed: ${runResult.error || JSON.stringify(runResult)}`);
+      }
+      await runUniver(['inspect', 'range', workbookPath, '--range', 'raw-data!A1:T5'], { univerPath: args.univerPath });
+      commitResult = await runUniverJson(
+        ['commit', workbookPath, '--message', buildCommitMessage(weekSheetName, runRecord)],
+        { univerPath: args.univerPath }
+      );
+      if (commitResult.success === false || commitResult.committed === false) {
+        throw new Error(`univer commit failed: ${JSON.stringify(commitResult)}`);
+      }
+      committed = true;
+    } catch (err) {
+      if (!committed) {
+        await restoreWorkbook(backupPath, workbookPath);
+      }
+      throw err;
     }
-    await runUniver(['inspect', 'range', workbookPath, '--range', 'raw-data!A1:T5'], { univerPath: args.univerPath });
     const syncResult = await runUniverJson(['sync', workbookPath], { univerPath: args.univerPath });
+    assertNoUncommittedMutations(syncResult);
     const publicUrl = config.univer?.publicUrl || publicUrlForUnit(config.univer?.unitId) || '';
 
     console.log(JSON.stringify({
@@ -420,6 +475,7 @@ export async function main(argv = process.argv.slice(2)) {
       weekSheetName,
       publicUrl,
       runResult,
+      commitResult,
       syncResult
     }, null, 2));
   } finally {

@@ -6,6 +6,8 @@ import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildRunRecord, buildWorkbookRunScript } from './update-univer-workbook.js';
+import { groupWeeklyDisplayRows, mapItemToRawRow } from './lib/univer-workbook-contract.js';
 
 const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const UPDATE = join(SCRIPT_DIR, 'update-univer-workbook.js');
@@ -44,10 +46,56 @@ case "$1 $2" in
   "inspect workbook") echo "# workbook"; exit 0 ;;
   "inspect range") echo "| contentId |"; exit 0 ;;
   "run "*) echo '{"success":true,"inserted":2,"updated":0,"weeklyRows":2,"weekSheetName":"2026-W22"}'; exit 0 ;;
-  "sync "*) echo '{"success":true,"status":{"unitID":"unit-test-1"}}'; exit 0 ;;
+  "commit "*) echo '{"success":true,"committed":true,"status":{"uncommittedMutationCount":0}}'; exit 0 ;;
+  "sync "*) echo '{"success":true,"status":{"unitID":"unit-test-1","uncommittedMutationCount":0}}'; exit 0 ;;
   *) echo "unexpected $*" >&2; exit 2 ;;
 esac
 `);
+}
+
+async function writeFailingRunUniver(path, callsPath) {
+  await writeExecutable(path, `#!/bin/sh
+printf '%s\\n' "$*" >> "${callsPath}"
+case "$1 $2" in
+  "inspect workbook") echo "# workbook"; exit 0 ;;
+  "run "*) printf 'mutated' > "$2/sentinel.txt"; echo '{"success":false,"error":"script failed"}'; exit 0 ;;
+  *) echo "unexpected $*" >&2; exit 2 ;;
+esac
+`);
+}
+
+async function writeCapturingUniver(path, callsPath, capturePath) {
+  await writeExecutable(path, `#!/bin/sh
+printf '%s\\n' "$*" >> "${callsPath}"
+case "$1 $2" in
+  "inspect workbook") echo "# workbook"; exit 0 ;;
+  "inspect range") echo "| contentId |"; exit 0 ;;
+  "run "*) cp "$4" "${capturePath}"; echo '{"success":true,"inserted":1,"updated":0,"weeklyRows":1,"weekSheetName":"2026-W22"}'; exit 0 ;;
+  "commit "*) echo '{"success":true,"committed":true,"status":{"uncommittedMutationCount":0}}'; exit 0 ;;
+  "sync "*) echo '{"success":true,"status":{"unitID":"unit-test-1","uncommittedMutationCount":0}}'; exit 0 ;;
+  *) echo "unexpected $*" >&2; exit 2 ;;
+esac
+`);
+}
+
+async function writeUncommittedSyncUniver(path, callsPath) {
+  await writeExecutable(path, `#!/bin/sh
+printf '%s\\n' "$*" >> "${callsPath}"
+case "$1 $2" in
+  "inspect workbook") echo "# workbook"; exit 0 ;;
+  "inspect range") echo "| contentId |"; exit 0 ;;
+  "run "*) echo '{"success":true,"inserted":2,"updated":0,"weeklyRows":2,"weekSheetName":"2026-W22"}'; exit 0 ;;
+  "commit "*) echo '{"success":true,"committed":true,"status":{"uncommittedMutationCount":0}}'; exit 0 ;;
+  "sync "*) echo '{"success":true,"status":{"unitID":"unit-test-1","uncommittedMutationCount":1}}'; exit 0 ;;
+  *) echo "unexpected $*" >&2; exit 2 ;;
+esac
+`);
+}
+
+function extractGeneratedPayload(script) {
+  const match = script.match(/const payload = (.*);\n  const DISPLAY_HEADER_ROW/s);
+  assert.ok(match, 'generated script should embed a payload object');
+  return JSON.parse(match[1]);
 }
 
 function validItemsPayload() {
@@ -127,12 +175,18 @@ test('updates configured workbook and syncs it', async t => {
     weeklyRows: 2,
     weekSheetName: '2026-W22'
   });
+  assert.deepEqual(status.commitResult, {
+    success: true,
+    committed: true,
+    status: { uncommittedMutationCount: 0 }
+  });
 
   const loggedCalls = (await readFile(calls, 'utf-8')).trim().split('\n');
   assert.equal(loggedCalls[0], `inspect workbook ${workbookPath}`);
   assert.match(loggedCalls[1], new RegExp(`^run ${workbookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} --file .+update-workbook\\.js$`));
   assert.equal(loggedCalls[2], `inspect range ${workbookPath} --range raw-data!A1:T5`);
-  assert.equal(loggedCalls[3], `sync ${workbookPath} --json`);
+  assert.equal(loggedCalls[3], `commit ${workbookPath} --message follow-builders 2026-W22 run-1 --json`);
+  assert.equal(loggedCalls[4], `sync ${workbookPath} --json`);
 });
 
 test('malformed items JSON exits non-zero with validation message', async t => {
@@ -202,4 +256,283 @@ test('rejects single-dash flag-like option values before config work', async t =
   assert.notEqual(result.status, 0);
   assert.match(result.stderr + result.stdout, /--items-json requires a value/);
   assert.doesNotMatch(result.stderr + result.stdout, /Could not read config/);
+});
+
+test('restores workbook directory when run script returns unsuccessful JSON before commit', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'fb-update-home-'));
+  const root = await mkdtemp(join(tmpdir(), 'fb-update-root-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  await writeConfig(home, workbookPath);
+  await mkdir(workbookPath, { recursive: true });
+  await writeFile(join(workbookPath, 'sentinel.txt'), 'original', 'utf-8');
+
+  const itemsPath = join(root, 'items.json');
+  await writeFile(itemsPath, JSON.stringify(validItemsPayload()), 'utf-8');
+
+  const fakeUniver = join(root, 'fake-univer');
+  const calls = join(root, 'calls.log');
+  await writeFailingRunUniver(fakeUniver, calls);
+
+  const result = spawnSync(process.execPath, [
+    UPDATE,
+    '--home', home,
+    '--items-json', itemsPath,
+    '--univer-path', fakeUniver
+  ], { encoding: 'utf-8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /univer run failed: script failed/);
+  assert.equal(await readFile(join(workbookPath, 'sentinel.txt'), 'utf-8'), 'original');
+  const loggedCalls = (await readFile(calls, 'utf-8')).trim().split('\n');
+  assert.equal(loggedCalls[0], `inspect workbook ${workbookPath}`);
+  assert.match(loggedCalls[1], new RegExp(`^run ${workbookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} --file .+update-workbook\\.js$`));
+  assert.equal(loggedCalls.length, 2);
+});
+
+test('fails clearly when sync reports uncommitted mutations after commit', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'fb-update-home-'));
+  const root = await mkdtemp(join(tmpdir(), 'fb-update-root-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  await writeConfig(home, workbookPath);
+  await writeFile(workbookPath, 'workbook', 'utf-8');
+
+  const itemsPath = join(root, 'items.json');
+  await writeFile(itemsPath, JSON.stringify(validItemsPayload()), 'utf-8');
+
+  const fakeUniver = join(root, 'fake-univer');
+  const calls = join(root, 'calls.log');
+  await writeUncommittedSyncUniver(fakeUniver, calls);
+
+  const result = spawnSync(process.execPath, [
+    UPDATE,
+    '--home', home,
+    '--items-json', itemsPath,
+    '--univer-path', fakeUniver
+  ], { encoding: 'utf-8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /uncommitted mutations/);
+  const loggedCalls = (await readFile(calls, 'utf-8')).trim().split('\n');
+  assert.match(loggedCalls[3], /^commit /);
+  assert.match(loggedCalls[4], /^sync /);
+});
+
+test('generated run record preserves original item count before dedupe', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'fb-update-home-'));
+  const root = await mkdtemp(join(tmpdir(), 'fb-update-root-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  await writeConfig(home, workbookPath);
+  await writeFile(workbookPath, 'workbook', 'utf-8');
+
+  const payload = validItemsPayload();
+  payload.items.push({ ...payload.items[0], title: 'Last duplicate wins', summary: 'Updated duplicate' });
+  const itemsPath = join(root, 'items.json');
+  await writeFile(itemsPath, JSON.stringify(payload), 'utf-8');
+
+  const capturedRunFile = join(root, 'captured-update-workbook.js');
+  const fakeUniver = join(root, 'fake-univer');
+  await writeCapturingUniver(fakeUniver, join(root, 'calls.log'), capturedRunFile);
+
+  const result = spawnSync(process.execPath, [
+    UPDATE,
+    '--home', home,
+    '--items-json', itemsPath,
+    '--univer-path', fakeUniver
+  ], { encoding: 'utf-8' });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const generated = extractGeneratedPayload(await readFile(capturedRunFile, 'utf-8'));
+  assert.equal(generated.runRecord.itemsSeen, 3);
+  assert.equal(generated.rawRows.length, 2);
+  assert.equal(generated.rawRows[0][5], 'Last duplicate wins');
+});
+
+class FakeRange {
+  constructor(sheet, row, column, rowCount = 1, columnCount = 1) {
+    this.sheet = sheet;
+    this.row = row;
+    this.column = column;
+    this.rowCount = rowCount;
+    this.columnCount = columnCount;
+  }
+
+  getValues() {
+    return Array.from({ length: this.rowCount }, (_, rowOffset) => (
+      Array.from({ length: this.columnCount }, (_, columnOffset) => (
+        this.sheet.getCell(this.row + rowOffset, this.column + columnOffset)
+      ))
+    ));
+  }
+
+  setValues(values) {
+    values.forEach((row, rowOffset) => {
+      row.forEach((value, columnOffset) => {
+        this.sheet.setCell(this.row + rowOffset, this.column + columnOffset, value);
+      });
+    });
+    return this;
+  }
+
+  setValue(value) {
+    this.sheet.setCell(this.row, this.column, value);
+    return this;
+  }
+
+  clearContent() {
+    for (let rowOffset = 0; rowOffset < this.rowCount; rowOffset += 1) {
+      for (let columnOffset = 0; columnOffset < this.columnCount; columnOffset += 1) {
+        this.sheet.setCell(this.row + rowOffset, this.column + columnOffset, '');
+      }
+    }
+    return this;
+  }
+
+  setFontWeight() { return this; }
+  setBackgroundColor() { return this; }
+  setFontColor() { return this; }
+  setVerticalAlignment() { return this; }
+  setFontSize() { return this; }
+  setHorizontalAlignment() { return this; }
+}
+
+class FakeSheet {
+  constructor(name) {
+    this.name = name;
+    this.cells = new Map();
+  }
+
+  key(row, column) {
+    return `${row}:${column}`;
+  }
+
+  getCell(row, column) {
+    return this.cells.get(this.key(row, column)) ?? '';
+  }
+
+  setCell(row, column, value) {
+    if (value === '') this.cells.delete(this.key(row, column));
+    else this.cells.set(this.key(row, column), value);
+  }
+
+  getRange(row, column, rowCount = 1, columnCount = 1) {
+    return new FakeRange(this, row, column, rowCount, columnCount);
+  }
+
+  getLastRow() {
+    let last = -1;
+    for (const key of this.cells.keys()) {
+      last = Math.max(last, Number(key.split(':')[0]));
+    }
+    return last;
+  }
+
+  setFrozenRows() { return this; }
+  setFrozenColumns() { return this; }
+  setHiddenGridlines() { return this; }
+  setColumnWidths() { return this; }
+  setColumnWidth() { return this; }
+  setRowHeights() { return this; }
+  setRowHeight() { return this; }
+}
+
+class FakeWorkbook {
+  constructor() {
+    this.sheets = new Map();
+  }
+
+  getSheetByName(name) {
+    return this.sheets.get(name) || null;
+  }
+
+  create(name) {
+    const sheet = new FakeSheet(name);
+    this.sheets.set(name, sheet);
+    return sheet;
+  }
+}
+
+function executeWorkbookRunScript(script, workbook) {
+  return Function('univerAPI', `return (${script})();`)({
+    getActiveWorkbook() {
+      return workbook;
+    }
+  });
+}
+
+function runRecord(itemsSeen, runId = `run-${itemsSeen}`) {
+  return buildRunRecord({
+    payload: { runId },
+    itemsJsonPath: '/tmp/items.json',
+    markdownPath: '/tmp/digest.md',
+    config: {
+      univer: {
+        unitId: 'unit-test-1',
+        publicUrl: 'https://univer.ai/space/sheets/unit-test-1'
+      }
+    },
+    startedAt: '2026-05-26T08:00:00.000Z',
+    finishedAt: '2026-05-26T08:01:00.000Z',
+    itemsSeen
+  });
+}
+
+test('generated workbook-local script initializes headers, upserts raw rows, appends runs, and renders weekly rows', () => {
+  const workbook = new FakeWorkbook();
+  const firstItem = validItemsPayload().items[0];
+  const firstRun = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-1'),
+    weekSheetName: '2026-W22'
+  });
+
+  assert.deepEqual(executeWorkbookRunScript(firstRun, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  const rawSheet = workbook.getSheetByName('raw-data');
+  const runsSheet = workbook.getSheetByName('runs');
+  const weekSheet = workbook.getSheetByName('2026-W22');
+  assert.equal(rawSheet.getCell(0, 0), 'contentId');
+  assert.equal(runsSheet.getCell(0, 0), 'runId');
+  assert.equal(rawSheet.getCell(1, 0), 'x:1');
+  assert.equal(rawSheet.getCell(1, 5), 'Agent update');
+  assert.equal(runsSheet.getCell(1, 5), 1);
+  assert.equal(runsSheet.getCell(1, 6), 0);
+  assert.equal(weekSheet.getCell(14, 0), 'Date');
+  assert.equal(weekSheet.getCell(15, 0), '2026-05-26');
+  assert.equal(weekSheet.getCell(15, 3), 'Agent update');
+
+  const updatedItem = { ...firstItem, title: 'Updated agent update', summary: 'New summary' };
+  const secondRun = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(updatedItem, '2026-05-26T09:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([updatedItem]),
+    runRecord: runRecord(2, 'run-2'),
+    weekSheetName: '2026-W22'
+  });
+
+  assert.deepEqual(executeWorkbookRunScript(secondRun, workbook), {
+    success: true,
+    inserted: 0,
+    updated: 1,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+  assert.equal(rawSheet.getCell(1, 5), 'Updated agent update');
+  assert.equal(runsSheet.getCell(2, 5), 0);
+  assert.equal(runsSheet.getCell(2, 6), 1);
+  assert.equal(weekSheet.getCell(15, 3), 'Updated agent update');
 });
