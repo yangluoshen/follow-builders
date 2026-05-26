@@ -237,6 +237,24 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return Math.max(120, DISPLAY_DATA_ROW + TABLE_CLEAR_EXTRA_ROWS + rowCount + 30);
   }
 
+  function sheetRowCapacity(sheet) {
+    if (typeof sheet.getMaxRows !== 'function') return null;
+    const value = Number(sheet.getMaxRows());
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function ensureSheetRows(sheet, requiredRows) {
+    const currentRows = sheetRowCapacity(sheet);
+    if (currentRows === null || currentRows >= requiredRows) return;
+    if (typeof sheet.setRowCount === 'function') {
+      sheet.setRowCount(requiredRows);
+      return;
+    }
+    if (typeof sheet.insertRowsAfter === 'function') {
+      sheet.insertRowsAfter(currentRows - 1, requiredRows - currentRows);
+    }
+  }
+
   function setHeader(sheet, headers) {
     sheet.getRange(0, 0, 1, headers.length).setValues([headers]);
     sheet
@@ -468,8 +486,10 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     sheet.setFrozenColumns(2);
 
     sheet.getRange(0, 0, DASHBOARD_CLEAR_ROWS, headers.length).clear();
-    const clearRows = Math.max(sheet.getLastRow() - DISPLAY_DATA_ROW + 1, rows.length + TABLE_CLEAR_EXTRA_ROWS, 1);
-    sheet.getRange(DISPLAY_DATA_ROW, 0, clearRows, headers.length).clearContent();
+    const staleClearRows = Math.max(sheet.getLastRow() - DISPLAY_DATA_ROW + 1, rows.length + TABLE_CLEAR_EXTRA_ROWS, 1);
+    const maxRows = sheetRowCapacity(sheet);
+    const clearRows = maxRows === null ? staleClearRows : Math.min(staleClearRows, Math.max(0, maxRows - DISPLAY_DATA_ROW));
+    if (clearRows > 0) sheet.getRange(DISPLAY_DATA_ROW, 0, clearRows, headers.length).clearContent();
 
     sheet.getRange('A1:J1').merge({ isForceMerge: true });
     sheet.getRange('A1').setValue(payload.sheetNames.week + ' Follow Builders');
@@ -576,6 +596,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     appendRunRow(runsSheet, result.inserted, result.updated);
     const weeklyRows = buildWeeklyRowsFromRaw(rawSheet);
     const weekSheet = ensureSheet(workbook, payload.sheetNames.week, weeklySheetRows(weeklyRows.length), payload.weekHeaders.length);
+    ensureSheetRows(weekSheet, weeklySheetRows(weeklyRows.length));
     renderWeeklySheet(weekSheet, result.inserted, result.updated, weeklyRows);
 
     return {

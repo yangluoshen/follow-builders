@@ -593,6 +593,8 @@ class FakeSheet {
   setFrozenRows(value) { this.frozenRows = value; return this; }
   setFrozenColumns(value) { this.frozenColumns = value; return this; }
   setHiddenGridlines(value) { this.hiddenGridlines = value; return this; }
+  getMaxRows() { return this.rowCapacity; }
+  setRowCount(value) { this.rowCapacity = value; return this; }
 
   setColumnWidths(start, count, width) {
     for (let index = 0; index < count; index += 1) this.columnWidths.set(start + index, width);
@@ -756,6 +758,32 @@ test('generated workbook-local script renders the weekly sheet from raw-data his
   assert.equal(weekSheet.getCell(15, 3), 'Agent update');
   assert.equal(weekSheet.getCell(16, 0), '2026-05-25');
   assert.equal(weekSheet.getCell(16, 3), 'Previous day update');
+});
+
+test('generated workbook-local script expands existing old weekly sheets before rendering dashboard', () => {
+  const workbook = new FakeWorkbook();
+  workbook.create('2026-W22', 120, 10);
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-old-week-sheet'),
+    weekSheetName: '2026-W22'
+  });
+
+  assert.deepEqual(executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  const weekSheet = workbook.getSheetByName('2026-W22');
+  assert.ok(weekSheet.rowCapacity >= 176);
+  assert.equal(weekSheet.getCell(0, 0), '2026-W22 Follow Builders');
+  assert.equal(weekSheet.getCell(14, 0), 'Date');
+  assert.equal(weekSheet.getCell(15, 3), 'Agent update');
 });
 
 test('generated workbook-local script renders editorial dashboard metrics and highlights', () => {
