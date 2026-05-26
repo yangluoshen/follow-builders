@@ -1,10 +1,16 @@
 # Univer Workbook Output Implementation Plan
 
+> Supersession note: steps in this historical plan that create, copy, or commit
+> `templates/follow-builders.univer` are obsolete. Use the code scaffold
+> initialization plan instead: create the user workbook with `univer new`, run
+> `univer run --file scripts/univer-template-scaffold.js`, commit the user
+> workbook locally, then sync it.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a long-lived Univer workbook output that stores raw captured content, renders weekly human-readable sheets, syncs to a public Univer URL, and preserves Markdown as the primary Telegram delivery format.
 
-**Architecture:** Keep workbook data contracts in small Node modules, use Codex only to generate Markdown plus a structured `items.json`, and use deterministic scripts to initialize and update `.univer` files through public `univer` CLI commands. The repo ships a committed, unsynced workbook template; user setup copies it, syncs once, and daily runs only edit the user's workbook copy.
+**Architecture:** Keep workbook data contracts in small Node modules, use Codex only to generate Markdown plus a structured `items.json`, and use deterministic scripts to initialize and update `.univer` files through public `univer` CLI commands. Historically, this plan had the repo ship a committed, unsynced workbook template; that path is obsolete per the supersession note above.
 
 **Tech Stack:** Node.js ESM, built-in `node:test`, existing `codex` runner, `univer` CLI, JSON config in `~/.follow-builders/config.json`.
 

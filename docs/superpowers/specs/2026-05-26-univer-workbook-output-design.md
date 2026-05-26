@@ -2,6 +2,12 @@
 
 Date: 2026-05-26
 
+> Supersession note: `templates/follow-builders.univer` has been replaced by
+> code scaffold initialization. Current setup creates a blank workbook with
+> `univer new`, then runs `univer run --file
+> scripts/univer-template-scaffold.js`. Daily updates still do not rebuild
+> workbook layout.
+
 ## Goal
 
 Add a Univer workbook output to Follow Builders while preserving the existing
@@ -17,47 +23,46 @@ fragile.
 - Markdown remains the main delivered output.
 - The workbook is a long-lived local `.univer` file at
   `~/.follow-builders/follow-builders.univer`.
-- The repo stores an unsynced workbook template at
-  `templates/follow-builders.univer`.
-- The template must be scaffolded and locally committed with `univer commit`,
-  but not synced. User setup copies it and runs `univer sync` once.
+- The repo stores scaffold code for workbook initialization rather than a
+  checked-in workbook template.
+- User setup creates a blank workbook, runs the scaffold once, commits the local
+  workbook state, and then syncs.
 - The first sync produces a `unit-id`; the public URL is
   `https://univer.ai/space/sheets/<unit-id>`.
 - The public URL is stored in config and appended to the Markdown digest when
   available.
 - Daily runs update and sync the user's workbook copy. They do not rebuild the
-  workbook layout and do not edit the repo template.
+  workbook layout and do not edit the scaffold contract.
 - Univer failures must not block Markdown delivery.
 
 ## Workbook Lifecycle
 
-### Template Creation
+### Scaffold Initialization
 
-The repo template is created once by running `univer new`, scaffolding workbook
-layout, styles, formulas, conditional formatting, charts, and required sheets,
-then committing the local workbook state with `univer commit`.
+The user workbook is initialized once by running `univer new`, applying
+`scripts/univer-template-scaffold.js` to create workbook layout, styles,
+formulas, conditional formatting, charts, and required sheets, then committing
+the local workbook state with `univer commit`.
 
-The committed template must remain unsynced. This ensures user setup can copy
-the template and run `univer sync` directly without needing another local commit
-step.
-
-Template path:
+Scaffold command:
 
 ```text
-templates/follow-builders.univer
+univer run --file scripts/univer-template-scaffold.js
 ```
 
 ### User Initialization
 
 During `setup follow builders`, if the user workbook does not exist:
 
-1. Copy `templates/follow-builders.univer` to
-   `~/.follow-builders/follow-builders.univer`.
-2. Run `univer inspect workbook` on the copied workbook to verify that it is
+1. Create `~/.follow-builders/follow-builders.univer` with `univer new`.
+2. Run `univer run --file scripts/univer-template-scaffold.js` against the new
+   workbook.
+3. Run `univer commit` on the scaffolded user workbook.
+4. Run `univer inspect workbook` on the workbook to verify that it is
    workbook-visible and readable.
-3. Run `univer sync ~/.follow-builders/follow-builders.univer`.
-4. Read the resulting `unit-id`.
-5. Save this config:
+5. Run `univer sync ~/.follow-builders/follow-builders.univer`.
+6. Read the resulting `unit-id`.
+7. Save this config:
 
 ```json
 {
@@ -87,7 +92,7 @@ Required sheets:
 
 Daily updates may edit data rows and current weekly display areas. They must not
 change fixed schemas, top-level layout anchors, chart anchors, formula-zone
-structure, or repo template state.
+structure, or scaffold contract state.
 
 ## Data Model
 
@@ -252,7 +257,8 @@ widths, chart anchors, and conditional formatting.
 5. Verify required sheets and headers through workbook-visible reads.
 6. Upsert `raw-data` by `contentId`.
 7. Append one row to `runs`.
-8. Create the current weekly sheet from the template if it does not exist.
+8. Create the current weekly sheet from the scaffolded weekly contract if it
+   does not exist.
 9. Refresh the current weekly sheet display area from `raw-data`.
 10. Verify changed workbook-visible state with `inspect`, `pipe out`, or `run`
     readback.
@@ -272,7 +278,7 @@ widths, chart anchors, and conditional formatting.
 - If `raw-data` or `runs` headers do not match the contract, stop workbook
   mutation to avoid corrupting history.
 - If the user workbook is missing and config has no existing `unitId`, initialize
-  from the repo template.
+  it from the scaffold code.
 - If the user workbook is missing but config already has `unitId` and
   `publicUrl`, do not silently overwrite the remote binding. Record an error and
   require an explicit reset or migration path.
@@ -308,12 +314,12 @@ Cover:
 
 ### Univer CLI Integration Tests
 
-Use a temporary workbook or a copied template. Verify only through public CLI
+Use a temporary scaffolded workbook. Verify only through public CLI
 reads.
 
 Cover:
 
-- Template workbook can be inspected.
+- Scaffolded workbook can be inspected.
 - Required sheets exist.
 - Required headers match the contract.
 - Upsert writes expected `raw-data` rows.
@@ -340,7 +346,7 @@ Before claiming the feature complete:
 
 Update `SKILL.md` with a `Univer Workbook Output` section that records:
 
-- Template path and required template state: committed, unsynced.
+- Scaffold initialization command and required committed user workbook state.
 - User workbook path.
 - Config keys.
 - Workbook sheets and schemas.

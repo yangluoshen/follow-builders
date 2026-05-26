@@ -1,5 +1,9 @@
 # Univer Workbook Visual Refresh Design
 
+> Supersession note: `_week-template` is still defined by
+> `scripts/univer-template-scaffold.js`, but the repo no longer stores a
+> checked-in `.univer` template.
+
 ## Context
 
 The first acceptance preview proved that the workbook update pipeline works, but the weekly sheet is not yet pleasant to read. The visible sheet still feels like a raw grid: clipped text, weak hierarchy, plain summary cells, and no meaningful use of spreadsheet presentation features beyond basic headers.
@@ -91,15 +95,18 @@ This preserves history and makes weekly sheets stable across daily updates.
 
 ## Template Responsibilities
 
-`templates/follow-builders.univer` should be rebuilt so `_week-template` reflects the new design, even though daily updates will render real week sheets directly.
+`scripts/univer-template-scaffold.js` should define `_week-template` so it
+reflects the new design, even though daily updates will render real week sheets
+directly.
 
-The template should contain:
+The scaffolded workbook should contain:
 
 - `raw-data` headers and practical widths.
 - `runs` headers and practical widths.
 - `_week-template` with the dashboard shell, table header, sample formatting, and conditional formatting.
 
-The repo template must remain committed but unsynced. User initialization will copy and sync it later.
+User initialization creates the workbook from scaffold code, commits it locally,
+and syncs it later.
 
 ## Renderer Responsibilities
 
@@ -125,7 +132,8 @@ Update `SKILL.md` so future agents understand:
 
 ## Acceptance Criteria
 
-- A copied template can be populated by one acceptance run and opened with `univer view`.
+- A scaffolded workbook can be populated by one acceptance run and opened with
+  `univer view`.
 - The first viewport shows a polished dashboard, not a plain grid.
 - Weekly dashboard metrics match the weekly rows.
 - The digest table is readable at 100% zoom in the Univer viewer.
