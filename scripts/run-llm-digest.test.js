@@ -55,12 +55,19 @@ for (let i = 0; i < args.length; i += 1) {
 
 const prompt = args.at(-1);
 const digestMatch = prompt.match(/^5\\. Write only the final digest markdown text to (.*)\\.$/m);
-if (!digestMatch) {
-  console.error('Could not find digest path in prompt');
+const itemsJsonMatch = prompt.match(/^6\\. Write the structured workbook items JSON to (.*)\\.$/m);
+if (!digestMatch || !itemsJsonMatch) {
+  console.error('Could not find digest and items JSON paths in prompt');
   process.exit(2);
 }
 
 writeFileSync(digestMatch[1], 'Fake digest from cron-safe Codex shim');
+writeFileSync(itemsJsonMatch[1], JSON.stringify({
+  runId: 'test-run',
+  generatedAt: '2026-05-26T00:00:00.000Z',
+  items: [],
+  presentationHints: { weeklyThemes: [], highlightContentIds: [] }
+}));
 writeFileSync(finalMessagePath, 'Digest delivered.');
 `);
 
@@ -111,7 +118,14 @@ case "$last" in
 esac
 
 digest_path="$(printf '%s\\n' "$last" | sed -n 's/^5\\. Write only the final digest markdown text to \\(.*\\)\\.$/\\1/p')"
+items_json_path="$(printf '%s\\n' "$last" | sed -n 's/^6\\. Write the structured workbook items JSON to \\(.*\\)\\.$/\\1/p')"
+if [ -z "$digest_path" ] || [ -z "$items_json_path" ]; then
+  echo "prompt did not include digest and items JSON output paths" >&2
+  exit 45
+fi
+
 printf 'Fake digest from absolute Node prompt' > "$digest_path"
+printf '{"runId":"test-run","generatedAt":"2026-05-26T00:00:00.000Z","items":[],"presentationHints":{"weeklyThemes":[],"highlightContentIds":[]}}' > "$items_json_path"
 printf 'Digest delivered.' > "$final_message_path"
 `);
 
@@ -123,4 +137,46 @@ printf 'Digest delivered.' > "$final_message_path"
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Fake digest from absolute Node prompt/);
+});
+
+test('delivers markdown when workbook update fails', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const fakeCodex = join(home, 'fake-codex.js');
+
+  await writeExecutable(fakeCodex, `#!/usr/bin/env node
+const { writeFileSync } = require('node:fs');
+
+const args = process.argv.slice(2);
+let finalMessagePath = null;
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] === '--output-last-message') finalMessagePath = args[i + 1];
+}
+
+const prompt = args.at(-1);
+const digestMatch = prompt.match(/^5\\. Write only the final digest markdown text to (.*)\\.$/m);
+const itemsJsonMatch = prompt.match(/^6\\. Write the structured workbook items JSON to (.*)\\.$/m);
+if (!digestMatch || !itemsJsonMatch) {
+  console.error('Could not find digest and items JSON paths in prompt');
+  process.exit(2);
+}
+
+writeFileSync(digestMatch[1], 'Digest survives workbook update failure');
+writeFileSync(itemsJsonMatch[1], JSON.stringify({
+  runId: 'test-run',
+  generatedAt: '2026-05-26T00:00:00.000Z',
+  items: [],
+  presentationHints: { weeklyThemes: [], highlightContentIds: [] }
+}));
+writeFileSync(finalMessagePath, 'Digest delivered.');
+`);
+
+  const result = runDigestWithFakeCodex({
+    codexPath: fakeCodex,
+    home,
+    extraEnv: { FOLLOW_BUILDERS_UNIVER_UPDATE_PATH: '/definitely/missing/updater' }
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Digest survives workbook update failure/);
 });
