@@ -202,14 +202,41 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     }
   };
 
-  return `() => {
+  return `async () => {
   const payload = ${JSON.stringify(payload)};
-  const DISPLAY_HEADER_ROW = 6;
+  const DISPLAY_HEADER_ROW = 10;
   const DISPLAY_DATA_ROW = DISPLAY_HEADER_ROW + 1;
-  const DASHBOARD_CLEAR_ROWS = 14;
-  const TABLE_CLEAR_EXTRA_ROWS = 160;
+  const DASHBOARD_CLEAR_ROWS = 18;
+  const TABLE_CLEAR_EXTRA_ROWS = 180;
+  const HELPER_COLUMN = 11;
+  const HELPER_WIDTH = 4;
+  const LOW_SCORE_THRESHOLD = 50;
   const COLORS = {
-    title: '#102033', titleSoft: '#1E3A5F', x: '#2563EB', podcast: '#7C3AED', blog: '#F59E0B', green: '#16A34A', greenSoft: '#DCFCE7', yellowSoft: '#FEF3C7', redSoft: '#FEE2E2', sheet: '#F6F8FB', card: '#FFFFFF', border: '#E2E8F0', text: '#111827', muted: '#64748B', tableHeader: '#1F4E79', tableAlt: '#F8FBFF'
+    title: '#0F1F33',
+    titleSoft: '#102033',
+    x: '#2563EB',
+    podcast: '#7C3AED',
+    blog: '#F59E0B',
+    median: '#0F766E',
+    lowScore: '#DC2626',
+    green: '#16A34A',
+    greenSoft: '#DCFCE7',
+    yellowSoft: '#FEF3C7',
+    redSoft: '#FEE2E2',
+    sheet: '#F8FAFC',
+    metadata: '#EAF2F8',
+    card: '#FFFFFF',
+    border: '#D8E0EA',
+    controlBorder: '#CBD5E1',
+    text: '#172033',
+    panelText: '#334155',
+    muted: '#475569',
+    tableHeader: '#1F4E79',
+    tableAlt: '#F8FBFF',
+    heatLow: '#F8FAFC',
+    heatMedium: '#BFDBFE',
+    heatHigh: '#2563EB',
+    heatAccent: '#F59E0B'
   };
 
   function stringValue(value) {
@@ -234,7 +261,11 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
   }
 
   function weeklySheetRows(rowCount) {
-    return Math.max(120, DISPLAY_DATA_ROW + TABLE_CLEAR_EXTRA_ROWS + rowCount + 30);
+    return Math.max(140, DISPLAY_DATA_ROW + TABLE_CLEAR_EXTRA_ROWS + rowCount + 30);
+  }
+
+  function weeklySheetColumns() {
+    return HELPER_COLUMN + HELPER_WIDTH;
   }
 
   function sheetRowCapacity(sheet) {
@@ -243,7 +274,19 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return Number.isFinite(value) ? value : null;
   }
 
-  function ensureSheetRows(sheet, requiredRows) {
+  function assertSheetRowsCanFit(sheet, requiredRows, sheetName = payload.sheetNames.week, purpose = 'Analyst Console weekly rendering') {
+    const currentRows = sheetRowCapacity(sheet);
+    if (currentRows === null || currentRows >= requiredRows) return;
+    if (typeof sheet.setRowCount === 'function') return;
+    if (typeof sheet.insertRowsAfter === 'function') return;
+    throw new Error(
+      sheetName + ' requires at least ' + requiredRows +
+      ' rows for ' + purpose + '; current sheet has ' +
+      currentRows + ' rows and cannot be expanded'
+    );
+  }
+
+  function ensureSheetRows(sheet, requiredRows, sheetName = payload.sheetNames.week, purpose = 'Analyst Console weekly rendering') {
     const currentRows = sheetRowCapacity(sheet);
     if (currentRows === null || currentRows >= requiredRows) return;
     if (typeof sheet.setRowCount === 'function') {
@@ -252,7 +295,51 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     }
     if (typeof sheet.insertRowsAfter === 'function') {
       sheet.insertRowsAfter(currentRows - 1, requiredRows - currentRows);
+      return;
     }
+    throw new Error(
+      sheetName + ' requires at least ' + requiredRows +
+      ' rows for ' + purpose + '; current sheet has ' +
+      currentRows + ' rows and cannot be expanded'
+    );
+  }
+
+  function sheetColumnCapacity(sheet) {
+    if (Number.isFinite(Number(sheet.columnCapacity))) return Number(sheet.columnCapacity);
+    if (typeof sheet.getMaxColumns !== 'function') return null;
+    const value = Number(sheet.getMaxColumns());
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function assertSheetColumnsCanFit(sheet, requiredColumns, sheetName = payload.sheetNames.week, purpose = 'Analyst Console helper ranges') {
+    const currentColumns = sheetColumnCapacity(sheet);
+    if (currentColumns === null || currentColumns >= requiredColumns) return;
+    if (typeof sheet.setColumnCount === 'function') return;
+    if (typeof sheet.insertColumnsAfter === 'function') return;
+    throw new Error(
+      sheetName + ' requires at least ' + requiredColumns +
+      ' columns for ' + purpose + '; current sheet has ' +
+      currentColumns + ' columns and cannot be expanded'
+    );
+  }
+
+  function ensureSheetColumns(sheet, requiredColumns, sheetName = payload.sheetNames.week, purpose = 'Analyst Console helper ranges') {
+    const currentColumns = sheetColumnCapacity(sheet);
+    if (currentColumns === null) return;
+    if (currentColumns >= requiredColumns) return;
+    if (typeof sheet.setColumnCount === 'function') {
+      sheet.setColumnCount(requiredColumns);
+      return;
+    }
+    if (typeof sheet.insertColumnsAfter === 'function') {
+      sheet.insertColumnsAfter(currentColumns - 1, requiredColumns - currentColumns);
+      return;
+    }
+    throw new Error(
+      sheetName + ' requires at least ' + requiredColumns +
+      ' columns for ' + purpose + '; current sheet has ' +
+      currentColumns + ' columns and cannot be expanded'
+    );
   }
 
   function setHeader(sheet, headers) {
@@ -278,6 +365,8 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
   }
 
   function lastNonEmptyRowInColumn(sheet, column, startRow) {
+    const currentColumns = sheetColumnCapacity(sheet);
+    if (currentColumns !== null && currentColumns <= column) return startRow - 1;
     const lastRow = sheet.getLastRow();
     if (lastRow < startRow) return startRow - 1;
     const values = sheet.getRange(startRow, column, lastRow - startRow + 1, 1).getValues();
@@ -304,27 +393,41 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return index;
   }
 
-  function upsertRawRows(sheet, rows) {
-    const rowIndex = existingRawRowIndex(sheet);
+  function planRawUpserts(sheet, rows) {
+    const rowIndex = sheet ? existingRawRowIndex(sheet) : new Map();
+    const operations = [];
+    let nextInsertRow = sheet ? nextAppendRow(sheet, 0) : 1;
     let inserted = 0;
     let updated = 0;
+    let requiredRows = 1;
     rows.forEach(row => {
       const contentId = stringValue(row[0]);
       if (!contentId) throw new Error('raw row contentId is required');
       if (rowIndex.has(contentId)) {
-        sheet.getRange(rowIndex.get(contentId), 0, 1, payload.rawHeaders.length).setValues([row]);
+        const targetRow = rowIndex.get(contentId);
+        operations.push({ targetRow, row });
+        requiredRows = Math.max(requiredRows, targetRow + 1);
         updated += 1;
       } else {
-        const appendRow = nextAppendRow(sheet, 0);
-        sheet.getRange(appendRow, 0, 1, payload.rawHeaders.length).setValues([row]);
-        rowIndex.set(contentId, appendRow);
+        const targetRow = nextInsertRow;
+        operations.push({ targetRow, row });
+        rowIndex.set(contentId, targetRow);
+        requiredRows = Math.max(requiredRows, targetRow + 1);
+        nextInsertRow += 1;
         inserted += 1;
       }
     });
-    return { inserted, updated };
+    return { inserted, updated, operations, requiredRows };
   }
 
-  function appendRunRow(sheet, inserted, updated) {
+  function upsertRawRows(sheet, rows, plan = planRawUpserts(sheet, rows)) {
+    plan.operations.forEach(operation => {
+      sheet.getRange(operation.targetRow, 0, 1, payload.rawHeaders.length).setValues([operation.row]);
+    });
+    return { inserted: plan.inserted, updated: plan.updated };
+  }
+
+  function appendRunRow(sheet, inserted, updated, targetRow = nextAppendRow(sheet, 0)) {
     const run = payload.runRecord;
     const row = [
       run.runId,
@@ -341,7 +444,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       run.publicUrl,
       run.errorSummary
     ];
-    sheet.getRange(nextAppendRow(sheet, 0), 0, 1, payload.runsHeaders.length).setValues([row]);
+    sheet.getRange(targetRow, 0, 1, payload.runsHeaders.length).setValues([row]);
   }
 
   function applyDataSheetFormatting(sheet, width) {
@@ -385,6 +488,33 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       }));
   }
 
+  function projectedWeeklyRowCount(rawSheet) {
+    if (!payload.weekStartDate || !payload.weekEndDate) return payload.displayRows.length;
+    const rowsByContentId = new Map();
+    if (rawSheet) {
+      const lastRow = lastNonEmptyRowInColumn(rawSheet, 0, 1);
+      if (lastRow >= 1) {
+        const currentColumns = sheetColumnCapacity(rawSheet);
+        const readableColumns = currentColumns === null ? payload.rawHeaders.length : Math.min(payload.rawHeaders.length, Math.max(1, currentColumns));
+        const values = rawSheet.getRange(1, 0, lastRow, readableColumns).getValues();
+        values.forEach(row => {
+          const contentId = stringValue(row[0]);
+          if (contentId) rowsByContentId.set(contentId, row);
+        });
+      }
+    }
+    payload.rawRows.forEach(row => {
+      const contentId = stringValue(row[0]);
+      if (contentId) rowsByContentId.set(contentId, row);
+    });
+    let count = 0;
+    rowsByContentId.forEach(row => {
+      const runDate = stringValue(row[9]);
+      if (runDate >= payload.weekStartDate && runDate <= payload.weekEndDate) count += 1;
+    });
+    return count;
+  }
+
   function rawFormula(column, rowNumber) {
     return "='raw-data'!" + column + rowNumber;
   }
@@ -422,9 +552,85 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return '=COUNTIFS(' + base + ",'raw-data'!B:B,\\\"" + sourceType + "\\\")";
   }
 
-  function averageScoreFormula() {
+  function weekDateCriteria() {
     if (!payload.weekStartDate || !payload.weekEndDate) return '';
-    return "=IFERROR(ROUND(AVERAGEIFS('raw-data'!O:O,'raw-data'!J:J,\\\">=" + payload.weekStartDate + "\\\",'raw-data'!J:J,\\\"<=" + payload.weekEndDate + "\\\"),0),\\\"—\\\")";
+    return "'raw-data'!J:J,\\\">=" + payload.weekStartDate + "\\\",'raw-data'!J:J,\\\"<=" + payload.weekEndDate + "\\\"";
+  }
+
+  function medianScoreFormula() {
+    if (!payload.weekStartDate || !payload.weekEndDate) return '';
+    return '=IFERROR(MEDIAN(FILTER(\\'raw-data\\'!O:O,\\'raw-data\\'!J:J>=\\\"' + payload.weekStartDate + '\\\",\\'raw-data\\'!J:J<=\\\"' + payload.weekEndDate + '\\\")),"-")';
+  }
+
+  function lowScoreFormula() {
+    const criteria = weekDateCriteria();
+    if (!criteria) return '';
+    return '=COUNTIFS(' + criteria + ",\\'raw-data\\'!O:O,\\\"<" + LOW_SCORE_THRESHOLD + "\\\")";
+  }
+
+  function scoreBandFormula(label) {
+    const criteria = weekDateCriteria();
+    if (!criteria) return '';
+    if (label === '80+') return '=COUNTIFS(' + criteria + ",\\'raw-data\\'!O:O,\\\">=80\\\")";
+    if (label === '50-79') return '=COUNTIFS(' + criteria + ",\\'raw-data\\'!O:O,\\\">=50\\\",\\'raw-data\\'!O:O,\\\"<80\\\")";
+    return '=COUNTIFS(' + criteria + ",\\'raw-data\\'!O:O,\\\"<50\\\")";
+  }
+
+  function dateAddFormula(offset) {
+    if (!payload.weekStartDate) return '';
+    return '=TEXT(DATEVALUE("' + payload.weekStartDate + '")+' + offset + ',"yyyy-mm-dd")';
+  }
+
+  function dailyVolumeFormula(offset) {
+    if (!payload.weekStartDate) return '';
+    const dateFormula = 'TEXT(DATEVALUE("' + payload.weekStartDate + '")+' + offset + ',"yyyy-mm-dd")';
+    return '=COUNTIFS(\\'raw-data\\'!J:J,' + dateFormula + ')';
+  }
+
+  function normalizeTopic(value) {
+    return stringValue(value).trim().toLowerCase();
+  }
+
+  function splitTopics(value) {
+    return stringValue(value)
+      .split(',')
+      .map(topic => topic.trim())
+      .filter(Boolean);
+  }
+
+  function topTopicsFromRaw(rawSheet, limit) {
+    const lastRow = lastNonEmptyRowInColumn(rawSheet, 0, 1);
+    if (lastRow < 1) return [];
+    const values = rawSheet.getRange(1, 0, lastRow, payload.rawHeaders.length).getValues();
+    const counts = new Map();
+    values.forEach(row => {
+      const runDate = stringValue(row[9]);
+      if (payload.weekStartDate && runDate < payload.weekStartDate) return;
+      if (payload.weekEndDate && runDate > payload.weekEndDate) return;
+      splitTopics(row[13]).forEach(topic => {
+        const key = normalizeTopic(topic);
+        if (!key) return;
+        const current = counts.get(key) || { label: topic, count: 0 };
+        current.count += 1;
+        counts.set(key, current);
+      });
+    });
+    return [...counts.values()]
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .slice(0, limit)
+      .map(entry => entry.label);
+  }
+
+  function topicCountFormula(topic, sourceType) {
+    if (!topic || topic === '-' || !payload.weekStartDate || !payload.weekEndDate) return '';
+    const escaped = String(topic)
+      .replace(/~/g, '~~')
+      .replace(/\\*/g, '~*')
+      .replace(/\\?/g, '~?')
+      .replace(/"/g, '""');
+    const base = weekDateCriteria() + ",\\'raw-data\\'!N:N,\\\"*" + escaped + "*\\\"";
+    if (!sourceType) return '=COUNTIFS(' + base + ')';
+    return '=COUNTIFS(' + base + ",\\'raw-data\\'!B:B,\\\"" + sourceType + "\\\")";
   }
 
   function sourceTypeFromDisplayType(value) {
@@ -460,8 +666,8 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
   function scoreFill(score) {
     const value = Number(score);
     if (!Number.isFinite(value)) return COLORS.card;
-    if (value >= 85) return COLORS.greenSoft;
-    if (value >= 60) return COLORS.yellowSoft;
+    if (value >= 80) return COLORS.greenSoft;
+    if (value >= 50) return COLORS.yellowSoft;
     return COLORS.redSoft;
   }
 
@@ -473,63 +679,272 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return COLORS.muted;
   }
 
-  function applyRangeBox(range, backgroundColor, fontColor) {
-    range
-      .setBackgroundColor(backgroundColor)
-      .setFontColor(fontColor)
-      .setVerticalAlignment('middle')
-      .setHorizontalAlignment('left');
+  function setOutsideBorder(range) {
+    if (typeof range.setBorder !== 'function') return range;
+    return range.setBorder(univerAPI.Enum.BorderType.OUTSIDE, univerAPI.Enum.BorderStyleTypes.THIN, COLORS.border);
   }
 
-  function renderWeeklySheet(sheet, inserted, updated, rows) {
+  function clearWeeklyFormatting(sheet) {
+    if (typeof sheet.clearConditionalFormatRules === 'function') sheet.clearConditionalFormatRules();
+  }
+
+  function clearWeeklyMerges(sheet, rowCount) {
+    const range = sheet.getRange(0, 0, rowCount, weeklySheetColumns());
+    if (typeof range.breakApart === 'function') {
+      range.breakApart();
+      return;
+    }
+    if (typeof range.unmerge === 'function') {
+      range.unmerge();
+      return;
+    }
+    if (typeof range.unMerge === 'function') {
+      range.unMerge();
+    }
+  }
+
+  function clearWeeklyDirectFormatting(sheet, rowCount) {
+    const range = sheet.getRange(0, 0, rowCount, weeklySheetColumns());
+    if (typeof range.clearFormat === 'function') range.clearFormat();
+  }
+
+  function applyScoreConditionalFormatting(sheet, rowCount) {
+    if (typeof sheet.newConditionalFormattingRule !== 'function' || typeof sheet.addConditionalFormattingRule !== 'function') return;
+    const scoreRange = sheet.getRange(DISPLAY_DATA_ROW, 7, Math.max(rowCount, 1), 1);
+    const highRule = sheet
+      .newConditionalFormattingRule()
+      .whenNumberGreaterThanOrEqualTo(80)
+      .setBackground(COLORS.greenSoft)
+      .setFontColor('#166534')
+      .setBold(true)
+      .setRanges([scoreRange.getRange()])
+      .build();
+    sheet.addConditionalFormattingRule(highRule);
+    const lowRule = sheet
+      .newConditionalFormattingRule()
+      .whenNumberLessThan(LOW_SCORE_THRESHOLD)
+      .setBackground(COLORS.redSoft)
+      .setFontColor('#991B1B')
+      .setBold(true)
+      .setRanges([scoreRange.getRange()])
+      .build();
+    sheet.addConditionalFormattingRule(lowRule);
+  }
+
+  function applyAnalyticsConditionalFormatting(sheet) {
+    if (typeof sheet.newConditionalFormattingRule !== 'function' || typeof sheet.addConditionalFormattingRule !== 'function') return;
+    const scoreBars = sheet
+      .newConditionalFormattingRule()
+      .setDataBar({
+        min: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 0 },
+        max: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 100 },
+        positiveColor: COLORS.x,
+        nativeColor: COLORS.lowScore,
+        isGradient: true,
+        isShowValue: true
+      })
+      .setRanges([sheet.getRange('F7:F9').getRange()])
+      .build();
+    sheet.addConditionalFormattingRule(scoreBars);
+
+    const topicHeat = sheet
+      .newConditionalFormattingRule()
+      .setColorScale([
+        { index: 0, color: COLORS.heatLow, value: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 0 } },
+        { index: 1, color: COLORS.heatMedium, value: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 2 } },
+        { index: 2, color: COLORS.heatHigh, value: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 5 } }
+      ])
+      .setRanges([sheet.getRange('B7:D9').getRange()])
+      .build();
+    sheet.addConditionalFormattingRule(topicHeat);
+  }
+
+  async function resetCharts(sheet) {
+    try {
+      if (typeof sheet.getCharts !== 'function' || typeof sheet.removeChart !== 'function') return true;
+      const charts = sheet.getCharts();
+      for (const chart of charts) {
+        await sheet.removeChart(chart);
+      }
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async function insertDailyVolumeChart(sheet) {
+    try {
+      if (typeof sheet.newChart !== 'function' || typeof sheet.insertChart !== 'function') return false;
+      const chartInfo = sheet
+        .newChart()
+        .setChartType(univerAPI.Enum.ChartType.Column)
+        .addRange('L7:M14')
+        .setPosition(5, 7, 0, 0)
+        .setWidth(300)
+        .setHeight(128)
+        .setOptions('title.content', 'Daily Volume')
+        .build();
+      await sheet.insertChart(chartInfo);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function renderDailyVolumeFallback(sheet) {
+    sheet.getRange('H7:J10').setValues([
+      ['Date', 'Items', ''],
+      [dateAddFormula(0), dailyVolumeFormula(0), ''],
+      [dateAddFormula(1), dailyVolumeFormula(1), ''],
+      [dateAddFormula(2), dailyVolumeFormula(2), '']
+    ]);
+    sheet.getRange('H7:J10').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange('H7:I7').setFontWeight('bold').setFontColor(COLORS.panelText);
+  }
+
+  function a1ToCell(a1) {
+    const match = /^([A-Z]+)(\\d+)$/.exec(a1);
+    if (!match) throw new Error('Unsupported A1 cell: ' + a1);
+    const column = match[1].split('').reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0) - 1;
+    return { row: Number(match[2]) - 1, column };
+  }
+
+  function setA1Value(sheet, a1, value) {
+    const parsed = a1ToCell(a1);
+    sheet.getRange(parsed.row, parsed.column).setValue(value);
+  }
+
+  async function renderWeeklySheet(sheet, inserted, updated, rows, rawSheet) {
     const headers = payload.weekHeaders;
     const displayRows = rows.map(weeklyDisplayRow);
+    const topics = topTopicsFromRaw(rawSheet, 3);
+    while (topics.length < 3) topics.push('-');
+    ensureSheetColumns(sheet, weeklySheetColumns());
 
     sheet.setHiddenGridlines(true);
-    sheet.setFrozenRows(7);
+    sheet.setFrozenRows(0);
     sheet.setFrozenColumns(0);
+    clearWeeklyFormatting(sheet);
+    const chartsReset = await resetCharts(sheet);
 
-    sheet.getRange(0, 0, DASHBOARD_CLEAR_ROWS, headers.length).clear();
     const staleClearRows = Math.max(sheet.getLastRow() - DISPLAY_DATA_ROW + 1, rows.length + TABLE_CLEAR_EXTRA_ROWS, 1);
     const maxRows = sheetRowCapacity(sheet);
     const clearRows = maxRows === null ? staleClearRows : Math.min(staleClearRows, Math.max(0, maxRows - DISPLAY_DATA_ROW));
+    const mergeClearRows = Math.max(DASHBOARD_CLEAR_ROWS, DISPLAY_DATA_ROW + clearRows);
+    const surfaceClearRows = maxRows === null ? mergeClearRows : Math.min(mergeClearRows, maxRows);
+    clearWeeklyMerges(sheet, surfaceClearRows);
+    clearWeeklyDirectFormatting(sheet, surfaceClearRows);
+    sheet.getRange(0, 0, DASHBOARD_CLEAR_ROWS, headers.length).clear();
+    sheet.getRange(0, HELPER_COLUMN, DASHBOARD_CLEAR_ROWS + 24, HELPER_WIDTH).clear();
     if (clearRows > 0) sheet.getRange(DISPLAY_DATA_ROW, 0, clearRows, headers.length).clearContent();
 
     sheet.getRange('A1:J1').merge({ isForceMerge: true });
     sheet.getRange('A1').setValue(payload.sheetNames.week + ' Follow Builders');
-    applyRangeBox(sheet.getRange('A1:J1'), COLORS.title, '#FFFFFF');
-    sheet.getRange('A1:J1').setFontWeight('bold').setFontSize(22);
+    sheet.getRange('A1:J1')
+      .setBackgroundColor(COLORS.title)
+      .setFontColor('#FFFFFF')
+      .setFontWeight('bold')
+      .setFontSize(22)
+      .setVerticalAlignment('middle')
+      .setHorizontalAlignment('left');
 
     sheet.getRange('A2:J2').merge({ isForceMerge: true });
-    sheet.getRange('A2').setValue(humanDateRange() + ' · Generated ' + payload.runRecord.finishedAt + ' · ' + (payload.runRecord.publicUrl || 'Local workbook'));
-    sheet.getRange('A2:J2').setBackgroundColor('#EAF2F8').setFontColor(COLORS.text).setVerticalAlignment('middle');
+    sheet.getRange('A2').setValue(humanDateRange() + ' - Generated ' + payload.runRecord.finishedAt + ' - ' + (payload.runRecord.publicUrl || 'Local workbook'));
+    sheet.getRange('A2:J2')
+      .setBackgroundColor(COLORS.metadata)
+      .setFontColor(COLORS.panelText)
+      .setVerticalAlignment('middle');
 
-    sheet.getRange('A4:B5').merge({ isForceMerge: true }).setValue(dashboardFormula() || rows.length);
-    sheet.getRange('C4:D5').merge({ isForceMerge: true }).setValue(dashboardFormula('x') || countBySource(rows).x);
-    sheet.getRange('E4:F5').merge({ isForceMerge: true }).setValue(dashboardFormula('podcast') || countBySource(rows).podcast);
-    sheet.getRange('G4:H5').merge({ isForceMerge: true }).setValue(dashboardFormula('blog') || countBySource(rows).blog);
-    sheet.getRange('I4:J5').merge({ isForceMerge: true }).setValue(averageScoreFormula() || '—');
-    [
-      ['A4:B5', COLORS.titleSoft],
-      ['C4:D5', COLORS.x],
-      ['E4:F5', COLORS.podcast],
-      ['G4:H5', COLORS.blog],
-      ['I4:J5', COLORS.green]
-    ].forEach(([a1, color]) => {
-      sheet.getRange(a1).setBackgroundColor(color).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(18).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.getRange('A3:J3').setBackgroundColor(COLORS.sheet);
+    sheet.getRange('A3:J3').setValues([['Source', 'All', 'Score', '0-100', 'Topic', 'All', 'Date -> Week', 'Sort', 'Signal', 'View -> Digest']]);
+    ['A3:B3', 'C3:D3', 'E3:F3', 'G3', 'H3:I3', 'J3'].forEach(a1 => {
+      sheet.getRange(a1)
+        .setBackgroundColor(COLORS.card)
+        .setFontColor(COLORS.muted)
+        .setVerticalAlignment('middle');
+      setOutsideBorder(sheet.getRange(a1));
     });
-    sheet.getRange('A3').setValue('Items');
-    sheet.getRange('C3').setValue('X');
-    sheet.getRange('E3').setValue('Podcast');
-    sheet.getRange('G3').setValue('Blog');
-    sheet.getRange('I3').setValue('Avg Score');
+    sheet.getRange('B3').setFontWeight('bold').setFontColor(COLORS.text);
+    sheet.getRange('D3').setFontWeight('bold').setFontColor(COLORS.text);
+    sheet.getRange('F3').setFontWeight('bold').setFontColor(COLORS.text);
+    sheet.getRange('G3').setFontWeight('bold').setFontColor(COLORS.text);
+    sheet.getRange('I3').setFontWeight('bold').setFontColor(COLORS.text);
+    sheet.getRange('J3').setFontWeight('bold').setFontColor(COLORS.text);
 
-    sheet.getRange('A6:J6').merge({ isForceMerge: true }).setValue('Daily Digest');
-    sheet.getRange('A6:J6').setBackgroundColor(COLORS.sheet).setFontColor(COLORS.text).setFontWeight('bold').setFontSize(16).setVerticalAlignment('middle');
+    const sourceCounts = countBySource(rows);
+    const kpiBlocks = [
+      { label: 'Items', value: dashboardFormula() || rows.length, cardRange: 'A4:B5', labelRange: 'A4:B4', valueRange: 'A5:B5', labelCell: 'A4', valueCell: 'A5', color: COLORS.titleSoft },
+      { label: 'X', value: dashboardFormula('x') || sourceCounts.x, cardRange: 'C4:D5', labelRange: 'C4:D4', valueRange: 'C5:D5', labelCell: 'C4', valueCell: 'C5', color: COLORS.x },
+      { label: 'Podcast', value: dashboardFormula('podcast') || sourceCounts.podcast, cardRange: 'E4:F5', labelRange: 'E4:F4', valueRange: 'E5:F5', labelCell: 'E4', valueCell: 'E5', color: COLORS.podcast },
+      { label: 'Blog', value: dashboardFormula('blog') || sourceCounts.blog, cardRange: 'G4:H5', labelRange: 'G4:H4', valueRange: 'G5:H5', labelCell: 'G4', valueCell: 'G5', color: COLORS.blog },
+      { label: 'Median', value: medianScoreFormula() || '-', cardRange: 'I4:I5', labelRange: 'I4:I4', valueRange: 'I5:I5', labelCell: 'I4', valueCell: 'I5', color: COLORS.median },
+      { label: 'Low Score', value: lowScoreFormula() || 0, cardRange: 'J4:J5', labelRange: 'J4:J4', valueRange: 'J5:J5', labelCell: 'J4', valueCell: 'J5', color: COLORS.lowScore }
+    ];
+    kpiBlocks.forEach(block => {
+      if (block.labelRange.includes(':')) sheet.getRange(block.labelRange).merge({ isForceMerge: true });
+      if (block.valueRange.includes(':')) sheet.getRange(block.valueRange).merge({ isForceMerge: true });
+      setA1Value(sheet, block.labelCell, block.label);
+      setA1Value(sheet, block.valueCell, block.value);
+      sheet.getRange(block.cardRange)
+        .setBackgroundColor(block.color)
+        .setFontColor('#FFFFFF')
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center')
+        .setVerticalAlignment('middle');
+    });
+
+    sheet.getRange('A6:D10').setBackgroundColor(COLORS.card);
+    sheet.getRange('E6:G10').setBackgroundColor(COLORS.card);
+    sheet.getRange('H6:J10').setBackgroundColor(COLORS.card);
+    ['A6:D10', 'E6:G10', 'H6:J10'].forEach(a1 => setOutsideBorder(sheet.getRange(a1)));
+    sheet.getRange('A6').setValue('TOPIC HEAT');
+    sheet.getRange('E6').setValue('SCORE DISTRIBUTION');
+    sheet.getRange('H6').setValue('DAILY VOLUME');
+    sheet.getRange('A6:J6').setFontWeight('bold').setFontColor(COLORS.panelText).setFontSize(10);
+
+    sheet.getRange('A7:D9').setValues([
+      [topics[0], topicCountFormula(topics[0], 'x'), topicCountFormula(topics[0], 'podcast'), topicCountFormula(topics[0], 'blog')],
+      [topics[1], topicCountFormula(topics[1], 'x'), topicCountFormula(topics[1], 'podcast'), topicCountFormula(topics[1], 'blog')],
+      [topics[2], topicCountFormula(topics[2], 'x'), topicCountFormula(topics[2], 'podcast'), topicCountFormula(topics[2], 'blog')]
+    ]);
+    sheet.getRange('B10:D10').setValues([['X', 'Podcast', 'Blog']]);
+    sheet.getRange('A7:D10').setFontSize(10).setVerticalAlignment('middle');
+
+    sheet.getRange('E7:G9').setValues([
+      ['80+', scoreBandFormula('80+'), 'High'],
+      ['50-79', scoreBandFormula('50-79'), 'Medium'],
+      ['<50', scoreBandFormula('<50'), 'Low']
+    ]);
+    sheet.getRange('E7:G9').setFontSize(10).setVerticalAlignment('middle');
+
+    sheet.getRange('L1').setValue('helper');
+    sheet.getRange('L2:M4').setValues([
+      ['score band', 'count'],
+      ['80+', scoreBandFormula('80+')],
+      ['50-79', scoreBandFormula('50-79')]
+    ]);
+    sheet.getRange('L5:M5').setValues([['<50', scoreBandFormula('<50')]]);
+    sheet.getRange('L7:M14').setValues([
+      ['daily volume', 'items'],
+      [dateAddFormula(0), dailyVolumeFormula(0)],
+      [dateAddFormula(1), dailyVolumeFormula(1)],
+      [dateAddFormula(2), dailyVolumeFormula(2)],
+      [dateAddFormula(3), dailyVolumeFormula(3)],
+      [dateAddFormula(4), dailyVolumeFormula(4)],
+      [dateAddFormula(5), dailyVolumeFormula(5)],
+      [dateAddFormula(6), dailyVolumeFormula(6)]
+    ]);
+    sheet.getRange('L16:O19').setValues([
+      ['topic heat', 'x', 'podcast', 'blog'],
+      [topics[0], topicCountFormula(topics[0], 'x'), topicCountFormula(topics[0], 'podcast'), topicCountFormula(topics[0], 'blog')],
+      [topics[1], topicCountFormula(topics[1], 'x'), topicCountFormula(topics[1], 'podcast'), topicCountFormula(topics[1], 'blog')],
+      [topics[2], topicCountFormula(topics[2], 'x'), topicCountFormula(topics[2], 'podcast'), topicCountFormula(topics[2], 'blog')]
+    ]);
+    sheet.getRange('L1:O19').setBackgroundColor('#F8FAFC').setFontColor(COLORS.muted).setFontSize(9);
+    if (typeof sheet.hideColumns === 'function') sheet.hideColumns(HELPER_COLUMN, HELPER_WIDTH);
 
     sheet.getRange(DISPLAY_HEADER_ROW, 0, 1, headers.length).setValues([headers]);
-    sheet
-      .getRange(DISPLAY_HEADER_ROW, 0, 1, headers.length)
+    sheet.getRange(DISPLAY_HEADER_ROW, 0, 1, headers.length)
       .setFontWeight('bold')
       .setFontColor('#FFFFFF')
       .setBackgroundColor(COLORS.tableHeader)
@@ -538,8 +953,11 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
 
     if (displayRows.length > 0) {
       sheet.getRange(DISPLAY_DATA_ROW, 0, displayRows.length, headers.length).setValues(displayRows);
-      sheet.getRange(DISPLAY_DATA_ROW, 0, displayRows.length, headers.length).setVerticalAlignment('top').setHorizontalAlignment('left').setWrap(true);
-      sheet.setRowHeights(DISPLAY_DATA_ROW, displayRows.length, 96);
+      sheet.getRange(DISPLAY_DATA_ROW, 0, displayRows.length, headers.length)
+        .setVerticalAlignment('top')
+        .setHorizontalAlignment('left')
+        .setWrap(true);
+      sheet.setRowHeights(DISPLAY_DATA_ROW, displayRows.length, 64);
       rows.forEach((row, index) => {
         const targetRow = DISPLAY_DATA_ROW + index;
         const rowFill = index % 2 === 0 ? COLORS.tableAlt : COLORS.card;
@@ -549,33 +967,66 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       });
     }
 
-    const widths = [104, 88, 150, 300, 430, 360, 170, 86, 330, 190];
+    const widths = [104, 76, 150, 300, 420, 340, 170, 86, 300, 180];
     widths.forEach((width, index) => sheet.setColumnWidth(index, width));
-    sheet.setRowHeight(0, 34);
+    sheet.setColumnWidths(HELPER_COLUMN, HELPER_WIDTH, 120);
+    sheet.setRowHeight(0, 42);
     sheet.setRowHeight(1, 28);
-    sheet.setRowHeight(2, 26);
-    sheet.setRowHeight(3, 44);
-    sheet.setRowHeight(4, 44);
-    sheet.setRowHeight(5, 30);
+    sheet.setRowHeight(2, 34);
+    sheet.setRowHeights(3, 2, 32);
+    sheet.setRowHeights(5, 5, 28);
     sheet.setRowHeight(DISPLAY_HEADER_ROW, 32);
+
+    applyAnalyticsConditionalFormatting(sheet);
+    applyScoreConditionalFormatting(sheet, displayRows.length);
+    const chartInserted = chartsReset ? await insertDailyVolumeChart(sheet) : false;
+    if (!chartInserted) renderDailyVolumeFallback(sheet);
   }
 
   try {
     const workbook = univerAPI.getActiveWorkbook();
-    const rawSheet = ensureSheet(workbook, payload.sheetNames.rawData, 2000, payload.rawHeaders.length);
-    const runsSheet = ensureSheet(workbook, payload.sheetNames.runs, 500, payload.runsHeaders.length);
+    const existingRawSheet = workbook.getSheetByName(payload.sheetNames.rawData);
+    const existingRunsSheet = workbook.getSheetByName(payload.sheetNames.runs);
+    const existingWeekSheet = workbook.getSheetByName(payload.sheetNames.week);
+    const rawPlan = planRawUpserts(existingRawSheet, payload.rawRows);
+    const runAppendRow = existingRunsSheet ? nextAppendRow(existingRunsSheet, 0) : 1;
+    if (existingRawSheet) {
+      assertSheetColumnsCanFit(existingRawSheet, payload.rawHeaders.length, payload.sheetNames.rawData, 'raw-data upsert');
+      assertSheetRowsCanFit(existingRawSheet, rawPlan.requiredRows, payload.sheetNames.rawData, 'raw-data upsert');
+    }
+    if (existingRunsSheet) {
+      assertSheetColumnsCanFit(existingRunsSheet, payload.runsHeaders.length, payload.sheetNames.runs, 'run append');
+      assertSheetRowsCanFit(existingRunsSheet, runAppendRow + 1, payload.sheetNames.runs, 'run append');
+    }
+
+    const expectedWeeklyRows = projectedWeeklyRowCount(existingRawSheet);
+    const requiredWeeklyRows = weeklySheetRows(expectedWeeklyRows);
+    const requiredWeeklyColumns = weeklySheetColumns();
+    if (existingWeekSheet) {
+      assertSheetRowsCanFit(existingWeekSheet, requiredWeeklyRows);
+      assertSheetColumnsCanFit(existingWeekSheet, requiredWeeklyColumns);
+    }
+
+    const rawSheet = ensureSheet(workbook, payload.sheetNames.rawData, Math.max(2000, rawPlan.requiredRows), payload.rawHeaders.length);
+    const runsSheet = ensureSheet(workbook, payload.sheetNames.runs, Math.max(500, runAppendRow + 1), payload.runsHeaders.length);
+    const weekSheet = ensureSheet(workbook, payload.sheetNames.week, requiredWeeklyRows, requiredWeeklyColumns);
+    ensureSheetColumns(rawSheet, payload.rawHeaders.length, payload.sheetNames.rawData, 'raw-data upsert');
+    ensureSheetRows(rawSheet, rawPlan.requiredRows, payload.sheetNames.rawData, 'raw-data upsert');
+    ensureSheetColumns(runsSheet, payload.runsHeaders.length, payload.sheetNames.runs, 'run append');
+    ensureSheetRows(runsSheet, runAppendRow + 1, payload.sheetNames.runs, 'run append');
+    ensureSheetRows(weekSheet, requiredWeeklyRows);
+    ensureSheetColumns(weekSheet, requiredWeeklyColumns);
 
     assertOrInitHeader(rawSheet, payload.rawHeaders, payload.sheetNames.rawData);
     assertOrInitHeader(runsSheet, payload.runsHeaders, payload.sheetNames.runs);
     applyDataSheetFormatting(rawSheet, payload.rawHeaders.length);
     applyDataSheetFormatting(runsSheet, payload.runsHeaders.length);
 
-    const result = upsertRawRows(rawSheet, payload.rawRows);
-    appendRunRow(runsSheet, result.inserted, result.updated);
+    const result = upsertRawRows(rawSheet, payload.rawRows, rawPlan);
+    appendRunRow(runsSheet, result.inserted, result.updated, runAppendRow);
     const weeklyRows = buildWeeklyRowsFromRaw(rawSheet);
-    const weekSheet = ensureSheet(workbook, payload.sheetNames.week, weeklySheetRows(weeklyRows.length), payload.weekHeaders.length);
     ensureSheetRows(weekSheet, weeklySheetRows(weeklyRows.length));
-    renderWeeklySheet(weekSheet, result.inserted, result.updated, weeklyRows);
+    await renderWeeklySheet(weekSheet, result.inserted, result.updated, weeklyRows, rawSheet);
 
     return {
       success: true,

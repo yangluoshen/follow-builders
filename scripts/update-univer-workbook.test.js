@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRunRecord, buildWorkbookRunScript } from './update-univer-workbook.js';
-import { groupWeeklyDisplayRows, mapItemToRawRow } from './lib/univer-workbook-contract.js';
+import { RAW_DATA_HEADERS, RUNS_HEADERS, groupWeeklyDisplayRows, mapItemToRawRow } from './lib/univer-workbook-contract.js';
 
 const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const UPDATE = join(SCRIPT_DIR, 'update-univer-workbook.js');
@@ -588,6 +588,11 @@ class FakeRange {
       rowCount: this.rowCount,
       columnCount: this.columnCount
     });
+    for (let rowOffset = 0; rowOffset < this.rowCount; rowOffset += 1) {
+      for (let columnOffset = 0; columnOffset < this.columnCount; columnOffset += 1) {
+        this.sheet.setCellFormat(this.row + rowOffset, this.column + columnOffset, method, value);
+      }
+    }
     return this;
   }
 
@@ -613,6 +618,22 @@ class FakeRange {
     return this;
   }
 
+  breakApart() {
+    this.sheet.merges = this.sheet.merges.filter(merge => {
+      const mergeEndRow = merge.row + merge.rowCount - 1;
+      const mergeEndColumn = merge.column + merge.columnCount - 1;
+      const rangeEndRow = this.row + this.rowCount - 1;
+      const rangeEndColumn = this.column + this.columnCount - 1;
+      return (
+        merge.row > rangeEndRow ||
+        mergeEndRow < this.row ||
+        merge.column > rangeEndColumn ||
+        mergeEndColumn < this.column
+      );
+    });
+    return this.record('breakApart', true);
+  }
+
   setFontWeight(value) { return this.record('setFontWeight', value); }
   setBackgroundColor(value) { return this.record('setBackgroundColor', value); }
   setFontColor(value) { return this.record('setFontColor', value); }
@@ -623,7 +644,22 @@ class FakeRange {
   setBorder(type, style, color) { return this.record('setBorder', { type, style, color }); }
   setFontFamily(value) { return this.record('setFontFamily', value); }
   setNumberFormats(value) { return this.record('setNumberFormats', value); }
-  clearFormat() { return this.record('clearFormat', true); }
+  clearFormat() {
+    this.sheet.formatting.push({
+      method: 'clearFormat',
+      value: true,
+      row: this.row,
+      column: this.column,
+      rowCount: this.rowCount,
+      columnCount: this.columnCount
+    });
+    for (let rowOffset = 0; rowOffset < this.rowCount; rowOffset += 1) {
+      for (let columnOffset = 0; columnOffset < this.columnCount; columnOffset += 1) {
+        this.sheet.clearCellFormats(this.row + rowOffset, this.column + columnOffset);
+      }
+    }
+    return this;
+  }
 }
 
 function a1ToIndexes(a1) {
@@ -685,6 +721,7 @@ class FakeSheet {
     this.clearedRanges = [];
     this.columnWidths = new Map();
     this.rowHeights = new Map();
+    this.cellFormats = new Map();
     this.frozenRows = 0;
     this.frozenColumns = 0;
     this.hiddenGridlines = false;
@@ -704,6 +741,25 @@ class FakeSheet {
   setCell(row, column, value) {
     if (value === '') this.cells.delete(this.key(row, column));
     else this.cells.set(this.key(row, column), value);
+  }
+
+  formatKey(row, column, method) {
+    return `${row}:${column}:${method}`;
+  }
+
+  setCellFormat(row, column, method, value) {
+    this.cellFormats.set(this.formatKey(row, column, method), value);
+  }
+
+  clearCellFormats(row, column) {
+    const prefix = `${row}:${column}:`;
+    for (const key of Array.from(this.cellFormats.keys())) {
+      if (key.startsWith(prefix)) this.cellFormats.delete(key);
+    }
+  }
+
+  getCellFormat(row, column, method) {
+    return this.cellFormats.get(this.formatKey(row, column, method));
   }
 
   getRange(row, column, rowCount = 1, columnCount = 1) {
@@ -755,6 +811,8 @@ class FakeSheet {
   setHiddenGridlines(value) { this.hiddenGridlines = value; return this; }
   getMaxRows() { return this.rowCapacity; }
   setRowCount(value) { this.rowCapacity = value; return this; }
+  getMaxColumns() { return this.columnCapacity; }
+  setColumnCount(value) { this.columnCapacity = value; return this; }
 
   setColumnWidths(start, count, width) {
     for (let index = 0; index < count; index += 1) this.columnWidths.set(start + index, width);
@@ -1003,6 +1061,422 @@ test('generated workbook-local script expands existing old weekly sheets before 
   assert.equal(weekSheet.frozenColumns, 0);
   assert.equal(weekSheet.getCell(10, 0), 'Date');
   assert.equal(weekSheet.getCell(11, 3), "='raw-data'!F2");
+  assert.ok(weekSheet.columnCapacity >= 15);
+  assert.equal(weekSheet.getCell(0, 11), 'helper');
+  assert.equal(weekSheet.getCell(6, 11), 'daily volume');
+  assert.ok(weekSheet.hiddenColumns.some(entry => entry.columnIndex === 11 && entry.numColumns >= 4));
+  assert.ok(weekSheet.charts.some(chart => chart.info.chartType === 'Column' && chart.info.range === 'L7:M14'));
+});
+
+test('generated workbook-local script removes stale weekly dashboard merges before repainting analyst panels', async () => {
+  const workbook = new FakeWorkbook();
+  const weekSheet = workbook.create('2026-W22', 220, 19);
+  weekSheet.getRange('A6:J6').merge({ isForceMerge: true }).setValue('Daily Digest');
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-stale-merge-week-sheet'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  assert.ok(!weekSheet.merges.some(merge => (
+    merge.row === 5 &&
+    merge.column === 0 &&
+    merge.rowCount === 1 &&
+    merge.columnCount === 10
+  )));
+  assert.equal(weekSheet.getCell(5, 0), 'TOPIC HEAT');
+  assert.equal(weekSheet.getCell(5, 4), 'SCORE DISTRIBUTION');
+  assert.equal(weekSheet.getCell(5, 7), 'DAILY VOLUME');
+  assert.ok(weekSheet.formatting.some(entry => entry.method === 'breakApart' && entry.row === 0 && entry.column === 0));
+});
+
+test('generated workbook-local script fails clearly when narrow weekly sheet cannot grow helper columns', async () => {
+  const workbook = new FakeWorkbook();
+  const fixedSheet = workbook.create('2026-W22', 220, 10);
+  fixedSheet.setColumnCount = undefined;
+  fixedSheet.insertColumnsAfter = undefined;
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-fixed-narrow-week-sheet'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: false,
+    error: '2026-W22 requires at least 15 columns for Analyst Console helper ranges; current sheet has 10 columns and cannot be expanded'
+  });
+
+  assert.equal(fixedSheet.getCell(0, 11), '');
+  assert.equal(fixedSheet.charts.length, 0);
+  assert.equal(workbook.getSheetByName('raw-data'), null);
+  assert.equal(workbook.getSheetByName('runs'), null);
+});
+
+test('generated workbook-local script fails clearly before mutation when short weekly sheet cannot grow rows', async () => {
+  const workbook = new FakeWorkbook();
+  const fixedSheet = workbook.create('2026-W22', 120, 19);
+  fixedSheet.setRowCount = undefined;
+  fixedSheet.insertRowsAfter = undefined;
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-fixed-short-week-sheet'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: false,
+    error: '2026-W22 requires at least 222 rows for Analyst Console weekly rendering; current sheet has 120 rows and cannot be expanded'
+  });
+
+  assert.equal(fixedSheet.getCell(0, 0), '');
+  assert.equal(workbook.getSheetByName('raw-data'), null);
+  assert.equal(workbook.getSheetByName('runs'), null);
+});
+
+test('generated workbook-local script preflights weekly rows from existing raw-data history before mutation', async () => {
+  const workbook = new FakeWorkbook();
+  const fixedSheet = workbook.create('2026-W22', 225, 15);
+  fixedSheet.setRowCount = undefined;
+  fixedSheet.insertRowsAfter = undefined;
+  const rawSheet = workbook.create('raw-data', 2000, 20);
+  const runsSheet = workbook.create('runs', 500, 13);
+  const baseItem = validItemsPayload().items[0];
+  const originalRawRowCount = 9;
+  Array.from({ length: originalRawRowCount }, (_, index) => {
+    rawSheet.getRange(index + 1, 0, 1, 20).setValues([mapItemToRawRow({
+      ...baseItem,
+      contentId: `existing:${index}`,
+      title: `Existing ${index}`,
+      runDate: '2026-05-26'
+    }, '2026-05-26T07:01:00.000Z')]);
+  });
+  runsSheet.getRange(1, 0).setValue('run-existing');
+  const firstItem = { ...baseItem, contentId: 'incoming:new' };
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-fixed-history-week-sheet'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: false,
+    error: '2026-W22 requires at least 231 rows for Analyst Console weekly rendering; current sheet has 225 rows and cannot be expanded'
+  });
+
+  assert.equal(rawSheet.getCell(10, 0), '');
+  assert.equal(runsSheet.getCell(2, 0), '');
+});
+
+test('generated workbook-local script does not grow raw or runs before weekly row preflight failure', async () => {
+  const workbook = new FakeWorkbook();
+  const fixedSheet = workbook.create('2026-W22', 225, 15);
+  fixedSheet.setRowCount = undefined;
+  fixedSheet.insertRowsAfter = undefined;
+  const rawSheet = workbook.create('raw-data', 10, 20);
+  const runsSheet = workbook.create('runs', 2, 13);
+  const baseItem = validItemsPayload().items[0];
+  Array.from({ length: 9 }, (_, index) => {
+    rawSheet.getRange(index + 1, 0, 1, 20).setValues([mapItemToRawRow({
+      ...baseItem,
+      contentId: `existing:${index}`,
+      title: `Existing ${index}`,
+      runDate: '2026-05-26'
+    }, '2026-05-26T07:01:00.000Z')]);
+  });
+  runsSheet.getRange(1, 0).setValue('run-existing');
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow({ ...baseItem, contentId: 'incoming:new' }, '2026-05-26T08:01:00.000Z')],
+    displayRows: [],
+    runRecord: runRecord(1, 'run-weekly-fails-before-raw-growth'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: false,
+    error: '2026-W22 requires at least 231 rows for Analyst Console weekly rendering; current sheet has 225 rows and cannot be expanded'
+  });
+
+  assert.equal(rawSheet.rowCapacity, 10);
+  assert.equal(runsSheet.rowCapacity, 2);
+  assert.equal(rawSheet.getCell(10, 0), '');
+  assert.equal(runsSheet.getCell(2, 0), '');
+});
+
+test('generated workbook-local script preflights full raw-data before writing any raw or run rows', async () => {
+  const workbook = new FakeWorkbook();
+  workbook.create('2026-W22', 240, 15);
+  const rawSheet = workbook.create('raw-data', 2, 20);
+  const runsSheet = workbook.create('runs', 500, 13);
+  rawSheet.setRowCount = undefined;
+  rawSheet.insertRowsAfter = undefined;
+  const [firstItem, secondItem] = validItemsPayload().items;
+  rawSheet.getRange(0, 0, 1, RAW_DATA_HEADERS.length).setValues([RAW_DATA_HEADERS]);
+  rawSheet.getRange(1, 0, 1, 20).setValues([mapItemToRawRow({
+    ...firstItem,
+    contentId: 'existing:1',
+    title: 'Existing raw row'
+  }, '2026-05-26T07:01:00.000Z')]);
+  runsSheet.getRange(1, 0).setValue('run-existing');
+  const script = buildWorkbookRunScript({
+    rawRows: [
+      mapItemToRawRow({ ...firstItem, contentId: 'incoming:1' }, '2026-05-26T08:01:00.000Z'),
+      mapItemToRawRow({ ...secondItem, contentId: 'incoming:2' }, '2026-05-26T08:01:00.000Z')
+    ],
+    displayRows: [],
+    runRecord: runRecord(2, 'run-full-raw'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: false,
+    error: 'raw-data requires at least 4 rows for raw-data upsert; current sheet has 2 rows and cannot be expanded'
+  });
+
+  assert.equal(rawSheet.getCell(1, 0), 'existing:1');
+  assert.equal(rawSheet.getCell(1, 5), 'Existing raw row');
+  assert.equal(rawSheet.getCell(2, 0), '');
+  assert.equal(runsSheet.getCell(2, 0), '');
+});
+
+test('generated workbook-local script preflights full runs sheet before writing raw rows', async () => {
+  const workbook = new FakeWorkbook();
+  workbook.create('2026-W22', 240, 15);
+  const rawSheet = workbook.create('raw-data', 2000, 20);
+  const runsSheet = workbook.create('runs', 2, 13);
+  runsSheet.setRowCount = undefined;
+  runsSheet.insertRowsAfter = undefined;
+  runsSheet.getRange(0, 0, 1, RUNS_HEADERS.length).setValues([RUNS_HEADERS]);
+  runsSheet.getRange(1, 0).setValue('run-existing');
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-full-runs'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: false,
+    error: 'runs requires at least 3 rows for run append; current sheet has 2 rows and cannot be expanded'
+  });
+
+  assert.equal(rawSheet.getCell(1, 0), '');
+  assert.equal(runsSheet.getCell(1, 0), 'run-existing');
+  assert.equal(runsSheet.getCell(2, 0), '');
+});
+
+test('generated workbook-local script preflights narrow raw-data columns before weekly side effects', async () => {
+  const workbook = new FakeWorkbook();
+  const weekSheet = workbook.create('2026-W22', 120, 10);
+  const rawSheet = workbook.create('raw-data', 2000, 10);
+  const runsSheet = workbook.create('runs', 500, 13);
+  rawSheet.setColumnCount = undefined;
+  rawSheet.insertColumnsAfter = undefined;
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-narrow-raw-before-weekly'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: false,
+    error: 'raw-data requires at least 20 columns for raw-data upsert; current sheet has 10 columns and cannot be expanded'
+  });
+
+  assert.equal(weekSheet.rowCapacity, 120);
+  assert.equal(weekSheet.columnCapacity, 10);
+  assert.equal(weekSheet.getCell(0, 0), '');
+  assert.equal(rawSheet.getCell(1, 0), '');
+  assert.equal(runsSheet.getCell(1, 0), '');
+});
+
+test('generated workbook-local script accepts fixed 15-column weekly sheets for L through O helpers', async () => {
+  const workbook = new FakeWorkbook();
+  const fixedSheet = workbook.create('2026-W22', 240, 15);
+  fixedSheet.setColumnCount = undefined;
+  fixedSheet.insertColumnsAfter = undefined;
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-fixed-15-column-week-sheet'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  assert.equal(fixedSheet.columnCapacity, 15);
+  assert.equal(fixedSheet.getCell(0, 11), 'helper');
+  assert.equal(fixedSheet.getCell(15, 14), 'blog');
+  assert.ok(fixedSheet.hiddenColumns.some(entry => entry.columnIndex === 11 && entry.numColumns === 4));
+  assert.ok(fixedSheet.charts.some(chart => chart.info.chartType === 'Column' && chart.info.range === 'L7:M14'));
+});
+
+test('generated workbook-local script renders visible daily volume fallback when chart APIs are unavailable', async () => {
+  const workbook = new FakeWorkbook();
+  const weekSheet = workbook.create('2026-W22', 220, 19);
+  weekSheet.newChart = undefined;
+  weekSheet.insertChart = undefined;
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-chartless-week-sheet'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  assert.equal(weekSheet.charts.length, 0);
+  assert.deepEqual(weekSheet.getRange('H7:J10').getValues(), [
+    ['Date', 'Items', ''],
+    ['=TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd")', '=COUNTIFS(\'raw-data\'!J:J,TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd"))', ''],
+    ['=TEXT(DATEVALUE("2026-05-25")+1,"yyyy-mm-dd")', '=COUNTIFS(\'raw-data\'!J:J,TEXT(DATEVALUE("2026-05-25")+1,"yyyy-mm-dd"))', ''],
+    ['=TEXT(DATEVALUE("2026-05-25")+2,"yyyy-mm-dd")', '=COUNTIFS(\'raw-data\'!J:J,TEXT(DATEVALUE("2026-05-25")+2,"yyyy-mm-dd"))', '']
+  ]);
+  assert.equal(weekSheet.getCell(6, 11), 'daily volume');
+  assert.equal(weekSheet.getCell(7, 11), '=TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd")');
+  assert.ok(weekSheet.hiddenColumns.some(entry => entry.columnIndex === 11 && entry.numColumns >= 4));
+});
+
+test('generated workbook-local script renders visible daily volume fallback when chart insertion fails', async () => {
+  const workbook = new FakeWorkbook();
+  const weekSheet = workbook.create('2026-W22', 220, 15);
+  weekSheet.insertChart = async () => {
+    throw new Error('chart service rejected insert');
+  };
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-chart-insert-fails'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  assert.equal(weekSheet.charts.length, 0);
+  assert.equal(weekSheet.getCell(6, 7), 'Date');
+  assert.equal(weekSheet.getCell(7, 7), '=TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd")');
+  assert.equal(weekSheet.getCell(7, 8), '=COUNTIFS(\'raw-data\'!J:J,TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd"))');
+});
+
+test('generated workbook-local script renders visible daily volume fallback when chart reset listing fails', async () => {
+  const workbook = new FakeWorkbook();
+  const weekSheet = workbook.create('2026-W22', 220, 15);
+  weekSheet.getCharts = () => {
+    throw new Error('chart list failed');
+  };
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-chart-list-fails'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  assert.equal(weekSheet.charts.length, 0);
+  assert.equal(weekSheet.getCell(6, 7), 'Date');
+  assert.equal(weekSheet.getCell(7, 7), '=TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd")');
+  assert.equal(weekSheet.getCell(7, 8), '=COUNTIFS(\'raw-data\'!J:J,TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd"))');
+});
+
+test('generated workbook-local script renders visible daily volume fallback when chart removal fails', async () => {
+  const workbook = new FakeWorkbook();
+  const weekSheet = workbook.create('2026-W22', 220, 15);
+  weekSheet.charts.push(new FakeChart('chart-existing', { chartType: 'Column', range: 'L7:M14' }));
+  weekSheet.removeChart = async () => {
+    throw new Error('chart removal failed');
+  };
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-chart-remove-fails'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  assert.equal(weekSheet.charts.length, 1);
+  assert.equal(weekSheet.getCell(6, 7), 'Date');
+  assert.equal(weekSheet.getCell(7, 7), '=TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd")');
+  assert.equal(weekSheet.getCell(7, 8), '=COUNTIFS(\'raw-data\'!J:J,TEXT(DATEVALUE("2026-05-25")+0,"yyyy-mm-dd"))');
 });
 
 test('generated workbook-local script renders analyst console formulas, panels, and raw-data references', async () => {
@@ -1054,10 +1528,10 @@ test('generated workbook-local script renders analyst console formulas, panels, 
   assert.equal(weekSheet.getCell(2, 3), '0-100');
   assert.equal(weekSheet.getCell(2, 4), 'Topic');
   assert.equal(weekSheet.getCell(2, 5), 'All');
-  assert.equal(weekSheet.getCell(2, 6), 'Date');
-  assert.equal(weekSheet.getCell(2, 7), 'Week');
-  assert.equal(weekSheet.getCell(2, 8), 'Sort');
-  assert.equal(weekSheet.getCell(2, 9), 'Signal');
+  assert.equal(weekSheet.getCell(2, 6), 'Date -> Week');
+  assert.equal(weekSheet.getCell(2, 7), 'Sort');
+  assert.equal(weekSheet.getCell(2, 8), 'Signal');
+  assert.equal(weekSheet.getCell(2, 9), 'View -> Digest');
 
   assert.equal(weekSheet.getCell(3, 0), 'Items');
   assert.equal(weekSheet.getCell(4, 0), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31")');
@@ -1088,7 +1562,7 @@ test('generated workbook-local script renders analyst console formulas, panels, 
   assert.equal(weekSheet.getCell(1, 11), 'score band');
   assert.equal(weekSheet.getCell(6, 11), 'daily volume');
   assert.equal(weekSheet.getCell(15, 11), 'topic heat');
-  assert.ok(weekSheet.hiddenColumns.some(entry => entry.columnIndex === 11 && entry.numColumns >= 6));
+  assert.ok(weekSheet.hiddenColumns.some(entry => entry.columnIndex === 11 && entry.numColumns >= 4));
 
   assert.equal(weekSheet.getCell(2, 11), '80+');
   assert.equal(weekSheet.getCell(2, 12), '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!O:O,">=80")');
@@ -1129,6 +1603,112 @@ test('generated workbook-local script renders analyst console formulas, panels, 
   assert.equal(weekSheet.rowHeights.get(11), 64);
   assert.ok(weekSheet.formatting.some(entry => entry.method === 'setBackgroundColor' && entry.value === '#0F1F33'));
   assert.ok(weekSheet.formatting.some(entry => entry.method === 'setWrap' && entry.value === true));
+});
+
+test('generated workbook-local script clears stale direct formatting before repainting weekly sheet', async () => {
+  const workbook = new FakeWorkbook();
+  const weekSheet = workbook.create('2026-W22', 240, 15);
+  weekSheet.markFormattedLastRow(60);
+  weekSheet.getRange(50, 9).setValue('stale');
+  weekSheet.getRange(50, 9).setBackgroundColor('#BADBAD').setFontColor('#101010');
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-stale-format-week-sheet'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  assert.equal(weekSheet.getCell(50, 9), '');
+  assert.equal(weekSheet.getCellFormat(50, 9, 'setBackgroundColor'), undefined);
+  assert.equal(weekSheet.getCellFormat(50, 9, 'setFontColor'), undefined);
+  assert.ok(weekSheet.formatting.some(entry => entry.method === 'clearFormat' && entry.row === 0 && entry.column === 0));
+});
+
+test('generated workbook-local script applies static score fills at analyst score band boundaries', async () => {
+  const workbook = new FakeWorkbook();
+  const baseItem = validItemsPayload().items[0];
+  const rows = [
+    { contentId: 'score:80', importanceScore: 80, title: 'Score 80' },
+    { contentId: 'score:50', importanceScore: 50, title: 'Score 50' },
+    { contentId: 'score:49', importanceScore: 49, title: 'Score 49' }
+  ].map(item => mapItemToRawRow({
+    ...baseItem,
+    ...item,
+    sourceType: 'x',
+    runDate: '2026-05-26'
+  }, '2026-05-26T08:01:00.000Z'));
+  const script = buildWorkbookRunScript({
+    rawRows: rows,
+    displayRows: [],
+    runRecord: runRecord(3, 'run-score-boundaries'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 3,
+    updated: 0,
+    weeklyRows: 3,
+    weekSheetName: '2026-W22'
+  });
+
+  const weekSheet = workbook.getSheetByName('2026-W22');
+  assert.equal(weekSheet.getCellFormat(11, 7, 'setBackgroundColor'), '#DCFCE7');
+  assert.equal(weekSheet.getCellFormat(12, 7, 'setBackgroundColor'), '#FEF3C7');
+  assert.equal(weekSheet.getCellFormat(13, 7, 'setBackgroundColor'), '#FEE2E2');
+});
+
+test('generated workbook-local script escapes topic wildcards and leaves placeholder topic formulas blank', async () => {
+  const workbook = new FakeWorkbook();
+  const specialTopicItem = {
+    ...validItemsPayload().items[0],
+    topics: ['agent*eval?~tilde'],
+    importanceScore: 88
+  };
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(specialTopicItem, '2026-05-26T08:01:00.000Z')],
+    runRecord: runRecord(1, 'run-special-topic'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  const weekSheet = workbook.getSheetByName('2026-W22');
+  const escapedTopicFormula = '=COUNTIFS(\'raw-data\'!J:J,">=2026-05-25",\'raw-data\'!J:J,"<=2026-05-31",\'raw-data\'!N:N,"*agent~*eval~?~~tilde*",\'raw-data\'!B:B,"x")';
+  assert.equal(weekSheet.getCell(6, 0), 'agent*eval?~tilde');
+  assert.equal(weekSheet.getCell(6, 1), escapedTopicFormula);
+  assert.equal(weekSheet.getCell(7, 0), '-');
+  assert.equal(weekSheet.getCell(7, 1), '');
+  assert.equal(weekSheet.getCell(7, 2), '');
+  assert.equal(weekSheet.getCell(7, 3), '');
+  assert.equal(weekSheet.getCell(15, 11), 'topic heat');
+  assert.equal(weekSheet.getCell(16, 11), 'agent*eval?~tilde');
+  assert.equal(weekSheet.getCell(16, 12), escapedTopicFormula);
+  assert.deepEqual(weekSheet.getRange('L18:O19').getValues(), [
+    ['-', '', '', ''],
+    ['-', '', '', '']
+  ]);
 });
 
 test('generated workbook-local script appends after last non-empty key row when sheets have formatted blank rows', async () => {
