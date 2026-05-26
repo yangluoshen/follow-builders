@@ -274,13 +274,17 @@ cron runner so the scheduled digest is remixed before delivery:
 SKILL_DIR="<absolute path to the skill directory>"
 cd "$SKILL_DIR/scripts" && npm install
 NODE_BIN="$(command -v node)"
+NODE_BIN_DIR="$(dirname "$NODE_BIN")"
 CODEX_BIN="$(command -v codex)"
-(crontab -l 2>/dev/null; echo "<cron expression> mkdir -p ~/.follow-builders/logs && cd \"$SKILL_DIR\" && FOLLOW_BUILDERS_CODEX_PATH=\"$CODEX_BIN\" \"$NODE_BIN\" scripts/run-llm-digest.js --agent codex >> ~/.follow-builders/logs/cron.log 2>&1") | crontab -
+CRON_PATH="$NODE_BIN_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+(crontab -l 2>/dev/null; echo "<cron expression> PATH=\"$CRON_PATH\"; export PATH; mkdir -p ~/.follow-builders/logs && cd \"$SKILL_DIR\" && FOLLOW_BUILDERS_CODEX_PATH=\"$CODEX_BIN\" \"$NODE_BIN\" scripts/run-llm-digest.js --agent codex >> ~/.follow-builders/logs/cron.log 2>&1") | crontab -
 ```
 
 This requires Codex to be installed, logged in, and available to cron. The runner
 uses `codex --ask-for-approval never exec` so scheduled jobs never block on
-interactive approval. If Codex cannot fetch the feeds under the default sandbox,
+interactive approval. It also propagates the current Node executable path to the
+Codex child process and local script commands, so nvm/asdf/Homebrew installs do
+not require hardcoded user paths. If Codex cannot fetch the feeds under the default sandbox,
 set `"cron.codexSandbox": "danger-full-access"` or pass
 `--codex-sandbox danger-full-access` in the cron command. Only use that mode when
 the machine running cron is already trusted. If `codex` is unavailable, tell the

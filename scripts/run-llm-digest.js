@@ -16,7 +16,7 @@
 import { spawn } from 'child_process';
 import { access, appendFile, mkdir, readFile, writeFile } from 'fs/promises';
 import { constants } from 'fs';
-import { dirname, join } from 'path';
+import { delimiter, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 
@@ -125,7 +125,7 @@ async function isExecutable(path) {
 }
 
 async function findOnPath(command) {
-  const paths = (process.env.PATH || '').split(':').filter(Boolean);
+  const paths = (process.env.PATH || '').split(delimiter).filter(Boolean);
   for (const dir of paths) {
     const candidate = join(dir, command);
     if (await isExecutable(candidate)) return candidate;
@@ -186,13 +186,28 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function buildPrompt(digestPath) {
+function prependPathEntry(entry, pathValue = '') {
+  const existingEntries = String(pathValue).split(delimiter).filter(Boolean);
+  const dedupedEntries = existingEntries.filter(existing => existing !== entry);
+  return [entry, ...dedupedEntries].join(delimiter);
+}
+
+function buildChildEnv(baseEnv = process.env, nodePath = process.execPath) {
+  const nodeBinDir = dirname(nodePath);
+  return {
+    ...baseEnv,
+    PATH: prependPathEntry(nodeBinDir, baseEnv.PATH || '')
+  };
+}
+
+function buildPrompt(digestPath, nodePath = process.execPath) {
   const digestPathForShell = shellQuote(digestPath);
+  const nodeCommand = shellQuote(nodePath);
 
   return `Run the Follow Builders digest workflow for a non-interactive cron job.
 
 Workflow:
-1. From the repository root, run: cd scripts && node prepare-digest.js
+1. From the repository root, run: cd scripts && ${nodeCommand} prepare-digest.js
 2. Parse the JSON output from prepare-digest.js. Use only that JSON as source material.
 3. If stats.podcastEpisodes, stats.xBuilders, and stats.blogPosts are all 0, write this exact digest text to ${digestPath}: No new updates from your builders today. Check back tomorrow!
 4. Otherwise, remix the content into a concise, human-readable digest:
@@ -203,7 +218,7 @@ Workflow:
    - Do not browse the web, visit URLs, search, or call APIs other than the local scripts named here.
    - Do not invent content. If a content item has no URL, omit it.
 5. Write only the final digest markdown text to ${digestPath}.
-6. Run: cd scripts && node deliver.js --file ${digestPathForShell}
+6. Run: cd scripts && ${nodeCommand} deliver.js --file ${digestPathForShell}
 
 Constraints:
 - Do not install packages, run npm install, run npm ci, edit repository files, or change user config.
@@ -264,7 +279,7 @@ async function runCodex({
   const startedAt = new Date();
   const child = spawn(codexPath, args, {
     cwd: SKILL_DIR,
-    env: process.env,
+    env: buildChildEnv(),
     stdio: ['ignore', 'pipe', 'pipe']
   });
 

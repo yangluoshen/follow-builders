@@ -106,8 +106,10 @@ node scripts/run-llm-digest.js --agent codex
 
 runner 会调用 `codex --ask-for-approval never exec`，使用交互式 skill 相同的
 prompts 重新混编摘要，把日志写入 `~/.follow-builders/logs/`，然后通过
-`scripts/deliver.js` 推送。如果 cron 的 PATH 找不到 `codex`，请设置
-`FOLLOW_BUILDERS_CODEX_PATH`。如果 Codex 默认 sandbox 阻止
+`scripts/deliver.js` 推送。runner 会使用当前 Node 可执行文件路径，
+因此 cron 可以兼容 nvm、asdf、Homebrew 和系统 Node，不需要硬编码用户路径。
+如果 cron 的 PATH 找不到 `codex`，请设置 `FOLLOW_BUILDERS_CODEX_PATH`。
+如果 Codex 默认 sandbox 阻止
 `prepare-digest.js` 访问网络，可以在可信机器上使用
 `--codex-sandbox danger-full-access`。只有在明确配置 raw 模式时才应使用
 原始 cron 推送，因为它可能发送结构化 JSON，而不是可读摘要。
