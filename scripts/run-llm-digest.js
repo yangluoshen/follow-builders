@@ -3,14 +3,14 @@
 // ============================================================================
 // Follow Builders - LLM Cron Digest Runner
 // ============================================================================
-// Runs the full digest workflow through a non-interactive Codex agent:
-// prepare-digest.js -> LLM remix -> deliver.js.
+// Runs the digest preparation workflow through a non-interactive Codex agent,
+// then handles workbook side effects and delivery in this wrapper.
 //
 // Usage:
 //   node run-llm-digest.js --agent codex
 //
-// The wrapper owns cron-safe process execution and logs. Codex owns the digest
-// workflow itself so scheduled runs match the interactive skill behavior.
+// The wrapper owns cron-safe process execution, logs, workbook side effects,
+// and delivery. Codex owns only the content remix artifact preparation.
 // ============================================================================
 
 import { spawn } from 'child_process';
@@ -19,6 +19,7 @@ import { constants } from 'fs';
 import { delimiter, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
+import { appendWorkbookUrl, validateItemsPayload } from './lib/univer-workbook-contract.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const SKILL_DIR = join(SCRIPT_DIR, '..');
@@ -200,8 +201,7 @@ function buildChildEnv(baseEnv = process.env, nodePath = process.execPath) {
   };
 }
 
-function buildPrompt(digestPath, nodePath = process.execPath) {
-  const digestPathForShell = shellQuote(digestPath);
+function buildPrompt(digestPath, itemsJsonPath, nodePath = process.execPath) {
   const nodeCommand = shellQuote(nodePath);
 
   return `Run the Follow Builders digest workflow for a non-interactive cron job.
@@ -218,14 +218,46 @@ Workflow:
    - Do not browse the web, visit URLs, search, or call APIs other than the local scripts named here.
    - Do not invent content. If a content item has no URL, omit it.
 5. Write only the final digest markdown text to ${digestPath}.
-6. Run: cd scripts && ${nodeCommand} deliver.js --file ${digestPathForShell}
+6. Write the structured workbook items JSON to ${itemsJsonPath}.
+   Use this exact top-level JSON shape:
+   {
+     "runId": "<stable run id or generatedAt timestamp>",
+     "generatedAt": "<ISO timestamp>",
+     "items": [
+       {
+         "contentId": "x:<tweet id> | podcast:<guid> | blog:<stable url hash if known>",
+         "sourceType": "x | podcast | blog",
+         "sourceName": "<X, podcast name, or blog name>",
+         "authorName": "<builder or author name>",
+         "authorHandle": "<X handle if any>",
+         "title": "<human-readable title>",
+         "url": "<source URL>",
+         "publishedAt": "<ISO timestamp or empty string>",
+         "capturedAt": "<ISO timestamp>",
+         "runDate": "<YYYY-MM-DD>",
+         "textExcerpt": "<short excerpt, not full transcript>",
+         "summary": "<AI summary>",
+         "keyPoints": ["<point>"],
+         "topics": ["<topic>"],
+         "importanceScore": 0,
+         "likes": 0,
+         "retweets": 0,
+         "replies": 0,
+         "rawSourceKey": "<tweet id, podcast guid, or blog URL>"
+       }
+     ],
+     "presentationHints": { "weeklyThemes": [], "highlightContentIds": [] }
+   }
 
 Constraints:
 - Do not install packages, run npm install, run npm ci, edit repository files, or change user config.
+- Delivery is handled by the wrapper.
+- Do not run deliver.js, Telegram/email delivery, or any delivery command/API.
+- Only run prepare-digest.js, write the digest markdown file, write the workbook items JSON file, and return status.
 - If any required command fails, do not try to repair the environment. Reply with "Digest failed: <short reason>".
 
 Final response requirements:
-- Reply with a one-line status only, such as "Digest delivered." or "Digest failed: <short reason>".
+- Reply with a one-line status only, such as "Digest prepared." or "Digest failed: <short reason>".
 - Do not paste the digest, raw JSON, transcripts, secrets, chat IDs, or logs in the final response.`;
 }
 
@@ -240,7 +272,13 @@ function resolveCodexSandbox(value) {
   return sandbox;
 }
 
-function buildCodexArgs({ digestPath, finalMessagePath, codexConfigProfile, codexSandbox }) {
+function buildCodexArgs({
+  digestPath,
+  itemsJsonPath,
+  finalMessagePath,
+  codexConfigProfile,
+  codexSandbox
+}) {
   const args = [
     '--ask-for-approval',
     'never',
@@ -263,7 +301,7 @@ function buildCodexArgs({ digestPath, finalMessagePath, codexConfigProfile, code
     args.push('--profile', codexConfigProfile);
   }
 
-  args.push(buildPrompt(digestPath));
+  args.push(buildPrompt(digestPath, itemsJsonPath));
   return args;
 }
 
@@ -273,6 +311,7 @@ async function runCodex({
   config,
   logPath,
   digestPath,
+  itemsJsonPath,
   finalMessagePath,
   codexSandbox
 }) {
@@ -302,6 +341,7 @@ async function runCodex({
     `codexPath=${codexPath}`,
     `codexSandbox=${codexSandbox}`,
     `digestPath=${digestPath}`,
+    `itemsJsonPath=${itemsJsonPath}`,
     `finalMessagePath=${finalMessagePath}`,
     `exitCode=${result.code}`,
     `signal=${result.signal || ''}`,
@@ -339,7 +379,12 @@ async function assertDigestFile(path) {
   }
 }
 
-async function assertFinalMessage(path) {
+function isWorkbookItemsOnlyFailure(message) {
+  return /\b(workbook|univer|items?\s+json|workbook items)\b/i.test(message) &&
+    !/\b(prepare-digest|prepare digest|markdown|digest file|digest markdown|digest text)\b/i.test(message);
+}
+
+async function assertFinalMessage(path, { config = {}, logPath = null } = {}) {
   let text = '';
   try {
     text = await readFile(path, 'utf-8');
@@ -348,7 +393,162 @@ async function assertFinalMessage(path) {
   }
 
   if (/^\s*digest failed\b/i.test(text)) {
-    throw new Error(text.trim());
+    const message = text.trim();
+    if (isWorkbookItemsOnlyFailure(message)) {
+      if (logPath) {
+        await appendFile(logPath, `workbookUpdateError=${redact(message, config)}\n`, 'utf-8')
+          .catch(() => {});
+      }
+      return;
+    }
+    throw new Error(message);
+  }
+}
+
+async function assertItemsJsonFile(path) {
+  let text;
+  try {
+    text = await readFile(path, 'utf-8');
+  } catch (err) {
+    throw new Error(`Codex did not create the workbook items JSON file: ${err.message}`);
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Codex created invalid workbook items JSON: ${err.message}`);
+  }
+
+  if (!payload || !Array.isArray(payload.items)) {
+    throw new Error('Workbook items JSON must contain a top-level items array');
+  }
+
+  validateItemsPayload(payload);
+  return payload;
+}
+
+async function runWorkbookUpdate({ config, digestPath, itemsJsonPath, logPath }) {
+  if (config.univer?.enabled === false || !config.univer?.workbookPath) {
+    await appendFile(
+      logPath,
+      '\n--- workbook update ---\nskipped=univer workbook not configured\n',
+      'utf-8'
+    );
+    return;
+  }
+
+  const startedAt = new Date();
+  const updaterPath = process.env.FOLLOW_BUILDERS_UNIVER_UPDATE_PATH ||
+    join(SCRIPT_DIR, 'update-univer-workbook.js');
+  const args = [
+    updaterPath,
+    '--items-json',
+    itemsJsonPath,
+    '--markdown-path',
+    digestPath
+  ];
+  const child = spawn(process.execPath, args, {
+    cwd: SKILL_DIR,
+    env: buildChildEnv(),
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  const stdout = [];
+  const stderr = [];
+
+  child.stdout.on('data', chunk => stdout.push(chunk));
+  child.stderr.on('data', chunk => stderr.push(chunk));
+
+  const result = await new Promise((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', (code, signal) => resolve({ code, signal }));
+  });
+  const finishedAt = new Date();
+  const log = [
+    '',
+    '--- workbook update ---',
+    `startedAt=${startedAt.toISOString()}`,
+    `finishedAt=${finishedAt.toISOString()}`,
+    `updaterPath=${updaterPath}`,
+    `itemsJsonPath=${itemsJsonPath}`,
+    `digestPath=${digestPath}`,
+    `exitCode=${result.code}`,
+    `signal=${result.signal || ''}`,
+    '',
+    '--- workbook stdout ---',
+    Buffer.concat(stdout).toString('utf-8'),
+    '',
+    '--- workbook stderr ---',
+    Buffer.concat(stderr).toString('utf-8'),
+    ''
+  ].join('\n');
+
+  await appendFile(logPath, redact(log, config), 'utf-8');
+
+  if (result.code !== 0) {
+    if (result.signal) {
+      throw new Error(`Workbook update failed with signal ${result.signal}. See ${logPath}`);
+    }
+    throw new Error(`Workbook update failed with exit code ${result.code}. See ${logPath}`);
+  }
+}
+
+async function runWorkbookSideEffects({ config, digestPath, itemsJsonPath, logPath }) {
+  await assertItemsJsonFile(itemsJsonPath);
+  await runWorkbookUpdate({ config, digestPath, itemsJsonPath, logPath });
+}
+
+async function runDelivery({ config, digestPath, logPath }) {
+  if ((config.delivery?.method || 'stdout') === 'stdout') {
+    console.log(await readFile(digestPath, 'utf-8'));
+    return;
+  }
+
+  const startedAt = new Date();
+  const deliverPath = process.env.FOLLOW_BUILDERS_DELIVER_PATH || join(SCRIPT_DIR, 'deliver.js');
+  const child = spawn(process.execPath, [deliverPath, '--file', digestPath], {
+    cwd: SKILL_DIR,
+    env: buildChildEnv(),
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  const stdout = [];
+  const stderr = [];
+
+  child.stdout.on('data', chunk => stdout.push(chunk));
+  child.stderr.on('data', chunk => stderr.push(chunk));
+
+  const result = await new Promise((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', (code, signal) => resolve({ code, signal }));
+  });
+  const finishedAt = new Date();
+  const log = [
+    '',
+    '--- delivery ---',
+    `startedAt=${startedAt.toISOString()}`,
+    `finishedAt=${finishedAt.toISOString()}`,
+    `deliverPath=${deliverPath}`,
+    `digestPath=${digestPath}`,
+    `exitCode=${result.code}`,
+    `signal=${result.signal || ''}`,
+    '',
+    '--- delivery stdout ---',
+    Buffer.concat(stdout).toString('utf-8'),
+    '',
+    '--- delivery stderr ---',
+    Buffer.concat(stderr).toString('utf-8'),
+    ''
+  ].join('\n');
+
+  await appendFile(logPath, redact(log, config), 'utf-8');
+
+  if (result.signal) {
+    throw new Error(`Delivery failed with signal ${result.signal}. See ${logPath}`);
+  }
+  if (result.code !== 0) {
+    throw new Error(`Delivery failed with exit code ${result.code}. See ${logPath}`);
   }
 }
 
@@ -363,6 +563,7 @@ async function main() {
 
   const runId = timestampSlug();
   const digestPath = join(LOG_DIR, `llm-digest-${runId}.md`);
+  const itemsJsonPath = join(LOG_DIR, `llm-digest-${runId}.items.json`);
   const finalMessagePath = join(LOG_DIR, `llm-digest-${runId}.final.txt`);
   const logPath = join(LOG_DIR, `llm-digest-${runId}.log`);
   let config = {};
@@ -378,6 +579,7 @@ async function main() {
     const codexSandbox = resolveCodexSandbox(args.codexSandbox || config.cron?.codexSandbox);
     const codexArgs = buildCodexArgs({
       digestPath,
+      itemsJsonPath,
       finalMessagePath,
       codexConfigProfile: config.cron?.codexProfile,
       codexSandbox
@@ -390,6 +592,7 @@ async function main() {
         `startedAt=${new Date().toISOString()}`,
         `agent=codex`,
         `digestPath=${digestPath}`,
+        `itemsJsonPath=${itemsJsonPath}`,
         `finalMessagePath=${finalMessagePath}`,
         ''
       ].join('\n'),
@@ -414,14 +617,32 @@ async function main() {
       config,
       logPath,
       digestPath,
+      itemsJsonPath,
       finalMessagePath,
       codexSandbox
     });
     await assertDigestFile(digestPath);
-    await assertFinalMessage(finalMessagePath);
+    await assertFinalMessage(finalMessagePath, { config, logPath });
+    await runWorkbookSideEffects({ config, digestPath, itemsJsonPath, logPath }).catch(async err => {
+      const lines = [
+        `workbookUpdateError=${redact(err.stack || err.message, config)}`
+      ];
+      if (config.univer?.publicUrl) {
+        lines.push('workbookUpdateWarning=remote workbook may not include latest data; appended public URL may be stale');
+      }
+      await appendFile(logPath, `${lines.join('\n')}\n`, 'utf-8');
+    });
 
+    if (config.univer?.publicUrl) {
+      const digest = await readFile(digestPath, 'utf-8');
+      const digestWithWorkbookUrl = appendWorkbookUrl(digest, config.univer.publicUrl);
+      if (digestWithWorkbookUrl !== digest) {
+        await writeFile(digestPath, digestWithWorkbookUrl, 'utf-8');
+      }
+    }
+
+    await runDelivery({ config, digestPath, logPath });
     if ((config.delivery?.method || 'stdout') === 'stdout') {
-      console.log(await readFile(digestPath, 'utf-8'));
       return;
     }
 

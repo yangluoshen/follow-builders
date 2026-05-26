@@ -186,10 +186,33 @@ cat > ~/.follow-builders/config.json << 'CFGEOF'
     "fallbackToRaw": false,
     "codexSandbox": "workspace-write"
   },
+  "univer": {
+    "enabled": true,
+    "workbookPath": "~/.follow-builders/follow-builders.univer",
+    "unitId": "",
+    "publicUrl": ""
+  },
   "onboardingComplete": true
 }
 CFGEOF
 ```
+
+The empty `univer.unitId` and `univer.publicUrl` values are pre-init
+placeholders. Workbook history is not active until initialization succeeds.
+
+Initialize the user workbook before cron verification:
+```bash
+cd ${CLAUDE_SKILL_DIR}/scripts && node init-univer-workbook.js
+```
+
+This creates `~/.follow-builders/follow-builders.univer` with `univer new`,
+applies the workbook scaffold with
+`univer run --file scripts/univer-template-scaffold.js`, runs `univer commit`,
+runs `univer sync`, and updates `univer.unitId` / `univer.publicUrl` in
+`~/.follow-builders/config.json`.
+If the `univer` CLI, login, or sync is unavailable, set `univer.enabled` to
+`false` for now and continue Markdown setup. Tell the user workbook history is
+inactive until they install/login to `univer` and rerun the init command.
 
 Then set up the scheduled job based on platform AND delivery method:
 
@@ -229,7 +252,7 @@ openclaw cron add \
   --cron "<cron expression>" \
   --tz "<user IANA timezone>" \
   --session isolated \
-  --message "Run the follow-builders skill: execute prepare-digest.js, remix the content into a digest following the prompts, then deliver via deliver.js" \
+  --message "Run the follow-builders skill: execute prepare-digest.js, remix the source material into Markdown, build workbook items JSON, update and sync the Univer workbook when config.univer is initialized/enabled, append config.univer.publicUrl if present, then deliver the Markdown." \
   --announce \
   --channel <channel name> \
   --to "<target ID>" \
@@ -309,7 +332,7 @@ and send the user their first digest so they can see what it looks like.
 Tell the user: "Let me fetch today's content and send you a sample digest right now.
 This takes about a minute."
 
-Then run the full Content Delivery workflow below (Steps 1-6) right now, without
+Then run the full Content Delivery workflow below right now, without
 waiting for the cron job.
 
 After delivering the digest, ask for feedback:
@@ -326,6 +349,76 @@ Then add the appropriate closing line based on their setup:
 
 Wait for their response and apply any feedback (update config.json or prompt files
 as needed). Then confirm the changes.
+
+---
+
+## Univer Workbook Output
+
+Markdown remains the primary delivery format, especially for Telegram and chat
+delivery. The Univer workbook is a long-lived history and review layer that
+accumulates past digest items over time.
+
+### Scaffold and Initialization
+
+There is no repo-stored workbook template. User workbooks are created from code:
+`init-univer-workbook.js` creates
+`~/.follow-builders/follow-builders.univer` with `univer new`, applies
+`scripts/univer-template-scaffold.js` with `univer run --file`, commits the
+scaffold with `univer commit`, syncs the workbook, and stores the returned
+`univer.unitId` plus `univer.publicUrl` in `~/.follow-builders/config.json`.
+
+For user initialization, run:
+```bash
+cd ${CLAUDE_SKILL_DIR}/scripts && node init-univer-workbook.js
+```
+
+The scaffold runs only during initial setup or explicit forced reinitialization
+(`--force`). Daily digest runs, workbook updates, and cron jobs must not run the
+scaffold; they update the already initialized workbook only.
+
+For an existing workbook that is already bound to a remote unit, do not use
+`univer clone`. Use `univer pull` or `univer sync` against the existing local
+workbook path.
+
+### Workbook Contract
+
+- `raw-data` is the only fact table. It is append-oriented and keyed by
+  `contentId`.
+- `runs` is append-only and records each digest/workbook update run.
+- Weekly sheets are display layers named by ISO week, such as `2026-W22`.
+- Daily updates may edit existing `raw-data` rows, append new `runs` rows, and
+  update the current weekly sheet's display area and helper summary values.
+- Daily updates must not change `raw-data` header order, `runs` header order,
+  weekly top layout anchors, or formula/reference structure.
+
+### Weekly Sheet Presentation Contract
+
+Weekly sheets use the Editorial Dashboard layout:
+
+- Row 1 is the dark title band: `<week> Follow Builders`.
+- Row 2 is the week metadata line.
+- Row 3 contains KPI labels at A/C/E/G/I.
+- Rows 4-5 contain KPI cards for total, X, Podcast, Blog, and Avg Score. The cards use formulas against `raw-data` where practical.
+- Row 6 introduces the Daily Digest table.
+- Row 7 renders the stable table header.
+- Rows 8+ render formula/reference rows into sorted `raw-data` rows, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
+- Weekly sheets freeze the top 7 rows and do not freeze columns.
+- The LLM must not redesign workbook layout during daily runs. It only writes structured item content.
+- `raw-data` remains the source of truth and must not be visually optimized at the expense of stable indexing.
+
+### Sorting and Deduplication
+
+Store one row per X tweet, podcast episode, or blog article. Use stable IDs:
+`x:<tweetId>`, `podcast:<guid>`, and `blog:<normalized-url-hash>`. Weekly display
+rows sort by date newest first; within the same day, source order is
+`X -> Podcast -> Blog`.
+
+### Failure Behavior
+
+Workbook update or sync failure must not block Markdown delivery. If sync fails,
+keep the local workbook mutation and let the next run retry. If an old
+`univer.publicUrl` exists, it may still be appended to the Markdown digest, but
+logs must mention that the remote workbook may not include the latest data.
 
 ---
 
@@ -425,19 +518,38 @@ Read `config.language` from the JSON:
 
 **Follow this setting exactly. Do NOT mix languages.**
 
-### Step 6: Deliver
+### Step 6: Update Univer workbook if initialized
+
+Before delivery, build the structured workbook items JSON from the same source
+material used for the Markdown digest. Follow the workbook contract above; do
+not duplicate or invent items that are not in the digest source material.
+
+Save the final Markdown to a file such as `/tmp/fb-digest.txt` and the workbook
+items JSON to a file such as `/tmp/fb-workbook-items.json`. If
+`config.univer.enabled !== false`, `config.univer.workbookPath` exists, and
+`config.univer.unitId` or `config.univer.publicUrl` is present, run:
+
+```bash
+cd ${CLAUDE_SKILL_DIR}/scripts && node update-univer-workbook.js --items-json /tmp/fb-workbook-items.json --markdown-path /tmp/fb-digest.txt
+```
+
+Workbook update or sync failures are non-blocking. Keep delivering Markdown. If
+`config.univer.publicUrl` exists, append `Univer workbook: <publicUrl>` to the
+Markdown before delivery; when the workbook update failed, mention in logs that
+the remote workbook may not include the latest data.
+
+### Step 7: Deliver
 
 Read `config.delivery.method` from the JSON:
 
 **If "telegram" or "email":**
 ```bash
-echo '<your digest text>' > /tmp/fb-digest.txt
 cd ${CLAUDE_SKILL_DIR}/scripts && node deliver.js --file /tmp/fb-digest.txt 2>/dev/null
 ```
 If delivery fails, show the digest in the terminal as fallback.
 
 **If "stdout" (default):**
-Just output the digest directly.
+Output the contents of `/tmp/fb-digest.txt` directly.
 
 ---
 

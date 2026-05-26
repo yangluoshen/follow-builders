@@ -89,6 +89,29 @@
         }
       }
     },
+    "univer": {
+      "type": "object",
+      "description": "Local Univer workbook output configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether daily runs should update the Univer workbook"
+        },
+        "workbookPath": {
+          "type": "string",
+          "description": "Path to the user's long-lived .univer workbook"
+        },
+        "unitId": {
+          "type": "string",
+          "description": "Remote Univer workbook unit id created by first sync"
+        },
+        "publicUrl": {
+          "type": "string",
+          "description": "Public Univer workbook URL"
+        }
+      }
+    },
     "onboardingComplete": {
       "type": "boolean",
       "default": false,
