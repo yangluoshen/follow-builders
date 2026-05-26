@@ -42,9 +42,9 @@
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["stdout", "telegram", "email"],
+          "enum": ["stdout", "telegram", "discord", "email"],
           "default": "stdout",
-          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), email (via Resend)"
+          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), discord (webhook), email (via Resend)"
         },
         "chatId": {
           "type": "string",
@@ -53,6 +53,29 @@
         "email": {
           "type": "string",
           "description": "Email address to send digest to (only for email method)"
+        },
+        "targets": {
+          "type": "array",
+          "description": "Optional multi-channel delivery targets. When present, targets overrides legacy delivery.method.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "enum": ["stdout", "telegram", "discord", "email"],
+                "description": "Delivery target method"
+              },
+              "chatId": {
+                "type": "string",
+                "description": "Telegram chat ID (only for telegram method)"
+              },
+              "email": {
+                "type": "string",
+                "description": "Email address to send digest to (only for email method)"
+              }
+            },
+            "required": ["method"]
+          }
         }
       }
     },

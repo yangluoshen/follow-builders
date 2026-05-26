@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 
 const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const DELIVER = join(SCRIPT_DIR, 'deliver.js');
+const CONFIG_SCHEMA = join(SCRIPT_DIR, '..', 'config', 'config-schema.json');
 const CLEAN_PATH = '/usr/bin:/bin';
 
 async function makeTempHome() {
@@ -191,6 +192,18 @@ test('discord target posts markdown content with mentions disabled', async t => 
   });
   assert.match(result.stdout, /"method":"discord"/);
   assert.match(result.stdout, /"status":"ok"/);
+});
+
+test('config schema allows discord and delivery targets', async () => {
+  const schema = JSON.parse(await readFile(CONFIG_SCHEMA, 'utf-8'));
+  const deliveryProperties = schema.properties.delivery.properties;
+
+  assert.ok(deliveryProperties.method.enum.includes('discord'));
+  assert.ok(deliveryProperties.targets);
+  assert.deepEqual(
+    deliveryProperties.targets.items.properties.method.enum,
+    ['stdout', 'telegram', 'discord', 'email']
+  );
 });
 
 test('discord target splits long markdown into multiple webhook posts', async t => {
