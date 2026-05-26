@@ -225,7 +225,7 @@ async function sendTarget(target, digestText, options = {}) {
 
   switch (target.method) {
     case 'discord': {
-      const webhookUrl = target.webhookUrl || process.env.DISCORD_WEBHOOK_URL;
+      const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
       if (!webhookUrl) throw new Error('DISCORD_WEBHOOK_URL not found in .env');
       await sendDiscord(digestText, webhookUrl);
       return {

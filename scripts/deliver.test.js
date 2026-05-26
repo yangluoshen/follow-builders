@@ -194,6 +194,35 @@ test('discord target posts markdown content with mentions disabled', async t => 
   assert.match(result.stdout, /"status":"ok"/);
 });
 
+test('discord target ignores webhookUrl from config and requires env secret', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  const server = await withJsonServer(({ res }) => {
+    res.statusCode = 204;
+    res.end();
+  });
+  t.after(() => server.close());
+
+  await writeConfig(home, {
+    delivery: {
+      targets: [{ method: 'discord', webhookUrl: server.url }]
+    }
+  });
+
+  const result = await runDeliver({ home, message: 'Config webhook must be ignored' });
+
+  assert.equal(result.status, 1);
+  assert.equal(server.requests.length, 0);
+
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'error');
+  assert.equal(summary.results.length, 1);
+  assert.equal(summary.results[0].method, 'discord');
+  assert.equal(summary.results[0].status, 'error');
+  assert.match(summary.results[0].message, /DISCORD_WEBHOOK_URL not found in \.env/);
+});
+
 test('config schema allows discord and delivery targets', async () => {
   const schema = JSON.parse(await readFile(CONFIG_SCHEMA, 'utf-8'));
   const deliveryProperties = schema.properties.delivery.properties;

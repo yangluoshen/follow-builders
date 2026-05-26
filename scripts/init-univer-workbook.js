@@ -100,7 +100,7 @@ async function backupExistingWorkbook(workbookPath) {
 
 async function createScaffoldedWorkbook({ workbookPath, scaffoldPath, univerPath }) {
   await mkdir(dirname(workbookPath), { recursive: true });
-  await runUniver(['new', workbookPath, '--name', 'Follow Builders'], { univerPath });
+  await runUniver(['new', workbookPath], { univerPath });
   const scaffoldOutput = await runUniver(['run', workbookPath, '--file', scaffoldPath], { univerPath });
   assertScaffoldSucceeded(parseJsonOutput(scaffoldOutput.stdout, 'univer run'));
   await runUniver(['inspect', 'workbook', workbookPath], { univerPath });
