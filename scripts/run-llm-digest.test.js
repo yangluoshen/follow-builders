@@ -115,7 +115,7 @@ case "$last" in
 esac
 
 case "$last" in
-  *"deliver.js"*)
+  *"Run: cd scripts && "*"deliver.js --file"*)
     echo "prompt should not run deliver.js" >&2
     exit 43
     ;;
@@ -127,6 +127,14 @@ case "$last" in
   *"cd scripts && node prepare-digest.js"*)
     echo "prompt still uses bare node for prepare-digest.js" >&2
     exit 44
+    ;;
+esac
+
+case "$last" in
+  *"Delivery is handled by the wrapper."*"Do not run deliver.js, Telegram/email delivery, or any delivery command/API."*"Only run prepare-digest.js, write the digest markdown file, write the workbook items JSON file, and return status."*) ;;
+  *)
+    echo "prompt did not explicitly forbid Codex delivery" >&2
+    exit 46
     ;;
 esac
 
@@ -152,7 +160,7 @@ printf 'Digest prepared.' > "$final_message_path"
   assert.match(result.stdout, /Fake digest from absolute Node prompt/);
 });
 
-test('missing items JSON does not block markdown stdout delivery', async t => {
+test('items JSON final-message failure does not block markdown stdout delivery', async t => {
   const home = await makeTempHome();
   t.after(() => rm(home, { recursive: true, force: true }));
   const fakeCodex = join(home, 'fake-codex.js');
@@ -175,7 +183,7 @@ if (!digestMatch || !itemsJsonMatch) {
 }
 
 writeFileSync(digestMatch[1], 'Digest survives workbook update failure');
-writeFileSync(finalMessagePath, 'Digest prepared.');
+writeFileSync(finalMessagePath, 'Digest failed: could not write workbook items JSON');
 `);
 
   const result = runDigestWithFakeCodex({
@@ -186,6 +194,7 @@ writeFileSync(finalMessagePath, 'Digest prepared.');
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Digest survives workbook update failure/);
   const log = await readRunLog(home);
+  assert.match(log, /workbookUpdateError=.*could not write workbook items JSON/s);
   assert.match(log, /workbookUpdateError=.*Codex did not create the workbook items JSON file/s);
 });
 

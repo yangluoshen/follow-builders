@@ -251,6 +251,9 @@ Workflow:
 
 Constraints:
 - Do not install packages, run npm install, run npm ci, edit repository files, or change user config.
+- Delivery is handled by the wrapper.
+- Do not run deliver.js, Telegram/email delivery, or any delivery command/API.
+- Only run prepare-digest.js, write the digest markdown file, write the workbook items JSON file, and return status.
 - If any required command fails, do not try to repair the environment. Reply with "Digest failed: <short reason>".
 
 Final response requirements:
@@ -376,7 +379,12 @@ async function assertDigestFile(path) {
   }
 }
 
-async function assertFinalMessage(path) {
+function isWorkbookItemsOnlyFailure(message) {
+  return /\b(workbook|univer|items?\s+json|workbook items)\b/i.test(message) &&
+    !/\b(prepare-digest|prepare digest|markdown|digest file|digest markdown|digest text)\b/i.test(message);
+}
+
+async function assertFinalMessage(path, { config = {}, logPath = null } = {}) {
   let text = '';
   try {
     text = await readFile(path, 'utf-8');
@@ -385,7 +393,15 @@ async function assertFinalMessage(path) {
   }
 
   if (/^\s*digest failed\b/i.test(text)) {
-    throw new Error(text.trim());
+    const message = text.trim();
+    if (isWorkbookItemsOnlyFailure(message)) {
+      if (logPath) {
+        await appendFile(logPath, `workbookUpdateError=${redact(message, config)}\n`, 'utf-8')
+          .catch(() => {});
+      }
+      return;
+    }
+    throw new Error(message);
   }
 }
 
@@ -606,7 +622,7 @@ async function main() {
       codexSandbox
     });
     await assertDigestFile(digestPath);
-    await assertFinalMessage(finalMessagePath);
+    await assertFinalMessage(finalMessagePath, { config, logPath });
     await runWorkbookSideEffects({ config, digestPath, itemsJsonPath, logPath }).catch(err =>
       appendFile(logPath, `workbookUpdateError=${redact(err.stack || err.message, config)}\n`, 'utf-8')
     );
