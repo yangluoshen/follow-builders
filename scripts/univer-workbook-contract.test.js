@@ -7,7 +7,7 @@ import {
   SHEETS,
   USER_WORKBOOK_NAME,
   WEEK_DISPLAY_HEADERS,
-  WORKBOOK_TEMPLATE_PATH,
+  WORKBOOK_SCAFFOLD_SCRIPT_PATH,
   appendWorkbookUrl,
   buildContentId,
   groupWeeklyDisplayRows,
@@ -58,7 +58,7 @@ test('exports fixed raw-data and runs headers', () => {
 });
 
 test('exports fixed workbook constants and sheet headers', () => {
-  assert.equal(WORKBOOK_TEMPLATE_PATH, 'templates/follow-builders.univer');
+  assert.equal(WORKBOOK_SCAFFOLD_SCRIPT_PATH, 'scripts/univer-template-scaffold.js');
   assert.equal(USER_WORKBOOK_NAME, 'follow-builders.univer');
   assert.equal(PUBLIC_URL_PREFIX, 'https://univer.ai/space/sheets/');
   assert.deepEqual(SHEETS, {

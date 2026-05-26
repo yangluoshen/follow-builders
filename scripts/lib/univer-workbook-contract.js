@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 
-export const WORKBOOK_TEMPLATE_PATH = 'templates/follow-builders.univer';
+export const WORKBOOK_SCAFFOLD_SCRIPT_PATH = 'scripts/univer-template-scaffold.js';
 export const USER_WORKBOOK_NAME = 'follow-builders.univer';
 export const PUBLIC_URL_PREFIX = 'https://univer.ai/space/sheets/';
 
