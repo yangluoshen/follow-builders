@@ -405,6 +405,127 @@ test('generated run record preserves original item count before dedupe', async t
   assert.equal(generated.rawRows[0][5], 'Last duplicate wins');
 });
 
+class FakeConditionalFormattingRuleBuilder {
+  constructor(sheet) {
+    this.sheet = sheet;
+    this.config = { ranges: [] };
+  }
+
+  setRanges(ranges) {
+    this.config.ranges = ranges;
+    return this;
+  }
+
+  setDataBar(config) {
+    this.config.type = 'dataBar';
+    this.config.dataBar = config;
+    return this;
+  }
+
+  setColorScale(config) {
+    this.config.type = 'colorScale';
+    this.config.colorScale = config;
+    return this;
+  }
+
+  whenNumberGreaterThanOrEqualTo(value) {
+    this.config.predicate = { type: 'numberGreaterThanOrEqualTo', value };
+    return this;
+  }
+
+  whenNumberLessThan(value) {
+    this.config.predicate = { type: 'numberLessThan', value };
+    return this;
+  }
+
+  setBackground(value) {
+    this.config.background = value;
+    return this;
+  }
+
+  setFontColor(value) {
+    this.config.fontColor = value;
+    return this;
+  }
+
+  setBold(value) {
+    this.config.bold = value;
+    return this;
+  }
+
+  build() {
+    return {
+      cfId: `cf-${this.sheet.conditionalFormattingRules.length + 1}`,
+      ...this.config
+    };
+  }
+}
+
+class FakeChartBuilder {
+  constructor(sheet) {
+    this.sheet = sheet;
+    this.config = {};
+  }
+
+  setChartType(value) {
+    this.config.chartType = value;
+    return this;
+  }
+
+  addRange(value) {
+    this.config.range = value;
+    return this;
+  }
+
+  setPosition(row, column, rowOffset, columnOffset) {
+    this.config.position = { row, column, rowOffset, columnOffset };
+    return this;
+  }
+
+  setWidth(value) {
+    this.config.width = value;
+    return this;
+  }
+
+  setHeight(value) {
+    this.config.height = value;
+    return this;
+  }
+
+  setOptions(path, value) {
+    if (!this.config.options) this.config.options = {};
+    this.config.options[path] = value;
+    return this;
+  }
+
+  build() {
+    return { ...this.config };
+  }
+}
+
+class FakeChart {
+  constructor(id, info) {
+    this.id = id;
+    this.info = info;
+  }
+
+  getChartId() {
+    return this.id;
+  }
+
+  getRange() {
+    return this.info.range;
+  }
+
+  getSeriesData() {
+    return [];
+  }
+
+  getCategoryData() {
+    return [];
+  }
+}
+
 class FakeRange {
   constructor(sheet, row, column, rowCount = 1, columnCount = 1) {
     this.sheet = sheet;
@@ -420,6 +541,19 @@ class FakeRange {
         this.sheet.getCell(this.row + rowOffset, this.column + columnOffset)
       ))
     ));
+  }
+
+  getValue() {
+    return this.sheet.getCell(this.row, this.column);
+  }
+
+  getRange() {
+    return {
+      startRow: this.row,
+      startColumn: this.column,
+      endRow: this.row + this.rowCount - 1,
+      endColumn: this.column + this.columnCount - 1
+    };
   }
 
   setValues(values) {
@@ -486,6 +620,10 @@ class FakeRange {
   setFontSize(value) { return this.record('setFontSize', value); }
   setHorizontalAlignment(value) { return this.record('setHorizontalAlignment', value); }
   setWrap(value) { return this.record('setWrap', value); }
+  setBorder(type, style, color) { return this.record('setBorder', { type, style, color }); }
+  setFontFamily(value) { return this.record('setFontFamily', value); }
+  setNumberFormats(value) { return this.record('setNumberFormats', value); }
+  clearFormat() { return this.record('clearFormat', true); }
 }
 
 function a1ToIndexes(a1) {
@@ -533,6 +671,9 @@ class FakeSheet {
     this.frozenRows = 0;
     this.frozenColumns = 0;
     this.hiddenGridlines = false;
+    this.conditionalFormattingRules = [];
+    this.charts = [];
+    this.hiddenColumns = [];
   }
 
   key(row, column) {
@@ -617,6 +758,48 @@ class FakeSheet {
     this.rowHeights.set(index, height);
     return this;
   }
+
+  newConditionalFormattingRule() {
+    return new FakeConditionalFormattingRuleBuilder(this);
+  }
+
+  addConditionalFormattingRule(rule) {
+    this.conditionalFormattingRules.push(rule);
+    return this;
+  }
+
+  getConditionalFormattingRules() {
+    return this.conditionalFormattingRules;
+  }
+
+  clearConditionalFormatRules() {
+    this.conditionalFormattingRules = [];
+    return this;
+  }
+
+  newChart() {
+    return new FakeChartBuilder(this);
+  }
+
+  async insertChart(chartInfo) {
+    const chart = new FakeChart(`chart-${this.charts.length + 1}`, chartInfo);
+    this.charts.push(chart);
+    return chart;
+  }
+
+  getCharts() {
+    return this.charts;
+  }
+
+  async removeChart(chart) {
+    this.charts = this.charts.filter(item => item !== chart);
+    return true;
+  }
+
+  hideColumns(columnIndex, numColumns) {
+    this.hiddenColumns.push({ columnIndex, numColumns });
+    return this;
+  }
 }
 
 class FakeWorkbook {
@@ -635,8 +818,14 @@ class FakeWorkbook {
   }
 }
 
-function executeWorkbookRunScript(script, workbook) {
-  return Function('univerAPI', `return (${script})();`)({
+async function executeWorkbookRunScript(script, workbook) {
+  return await Function('univerAPI', `return (${script})();`)({
+    Enum: {
+      BorderType: { ALL: 'ALL', OUTSIDE: 'OUTSIDE', INSIDE: 'INSIDE', NONE: 'NONE' },
+      BorderStyleTypes: { THIN: 'THIN' },
+      ChartType: { Column: 'Column', Bar: 'Bar' },
+      ConditionFormatValueTypeEnum: { num: 'num', min: 'min', max: 'max' }
+    },
     getActiveWorkbook() {
       return workbook;
     }
@@ -660,7 +849,7 @@ function runRecord(itemsSeen, runId = `run-${itemsSeen}`) {
   });
 }
 
-test('generated workbook-local script initializes headers, upserts raw rows, appends runs, and renders weekly rows', () => {
+test('generated workbook-local script initializes headers, upserts raw rows, appends runs, and renders weekly rows', async () => {
   const workbook = new FakeWorkbook();
   const firstItem = validItemsPayload().items[0];
   const firstRun = buildWorkbookRunScript({
@@ -672,7 +861,7 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
     weekEndDate: '2026-05-31'
   });
 
-  assert.deepEqual(executeWorkbookRunScript(firstRun, workbook), {
+  assert.deepEqual(await executeWorkbookRunScript(firstRun, workbook), {
     success: true,
     inserted: 1,
     updated: 0,
@@ -704,7 +893,7 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
     weekEndDate: '2026-05-31'
   });
 
-  assert.deepEqual(executeWorkbookRunScript(secondRun, workbook), {
+  assert.deepEqual(await executeWorkbookRunScript(secondRun, workbook), {
     success: true,
     inserted: 0,
     updated: 1,
@@ -717,7 +906,7 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
   assert.equal(weekSheet.getCell(7, 3), "='raw-data'!F2");
 });
 
-test('generated workbook-local script renders the weekly sheet from raw-data history', () => {
+test('generated workbook-local script renders the weekly sheet from raw-data history', async () => {
   const workbook = new FakeWorkbook();
   const currentItem = validItemsPayload().items[0];
   const previousItem = {
@@ -736,7 +925,7 @@ test('generated workbook-local script renders the weekly sheet from raw-data his
     weekStartDate: '2026-05-25',
     weekEndDate: '2026-05-31'
   });
-  assert.deepEqual(executeWorkbookRunScript(firstRun, workbook), {
+  assert.deepEqual(await executeWorkbookRunScript(firstRun, workbook), {
     success: true,
     inserted: 1,
     updated: 0,
@@ -751,7 +940,7 @@ test('generated workbook-local script renders the weekly sheet from raw-data his
     weekStartDate: '2026-05-25',
     weekEndDate: '2026-05-31'
   });
-  assert.deepEqual(executeWorkbookRunScript(secondRun, workbook), {
+  assert.deepEqual(await executeWorkbookRunScript(secondRun, workbook), {
     success: true,
     inserted: 1,
     updated: 0,
@@ -767,7 +956,7 @@ test('generated workbook-local script renders the weekly sheet from raw-data his
   assert.equal(weekSheet.getCell(8, 3), "='raw-data'!F2");
 });
 
-test('generated workbook-local script expands existing old weekly sheets before rendering dashboard', () => {
+test('generated workbook-local script expands existing old weekly sheets before rendering dashboard', async () => {
   const workbook = new FakeWorkbook();
   workbook.create('2026-W22', 120, 10);
   const firstItem = validItemsPayload().items[0];
@@ -780,7 +969,7 @@ test('generated workbook-local script expands existing old weekly sheets before 
     weekEndDate: '2026-05-31'
   });
 
-  assert.deepEqual(executeWorkbookRunScript(script, workbook), {
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
     success: true,
     inserted: 1,
     updated: 0,
@@ -795,7 +984,7 @@ test('generated workbook-local script expands existing old weekly sheets before 
   assert.equal(weekSheet.getCell(7, 3), "='raw-data'!F2");
 });
 
-test('generated workbook-local script renders compact dashboard formulas and raw-data references', () => {
+test('generated workbook-local script renders compact dashboard formulas and raw-data references', async () => {
   const workbook = new FakeWorkbook();
   const [xItem, podcastItem] = validItemsPayload().items;
   const blogItem = {
@@ -823,7 +1012,7 @@ test('generated workbook-local script renders compact dashboard formulas and raw
     weekEndDate: '2026-05-31'
   });
 
-  assert.deepEqual(executeWorkbookRunScript(script, workbook), {
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
     success: true,
     inserted: 3,
     updated: 0,
@@ -863,7 +1052,7 @@ test('generated workbook-local script renders compact dashboard formulas and raw
   assert.ok(weekSheet.formatting.some(entry => entry.method === 'setWrap' && entry.value === true));
 });
 
-test('generated workbook-local script appends after last non-empty key row when sheets have formatted blank rows', () => {
+test('generated workbook-local script appends after last non-empty key row when sheets have formatted blank rows', async () => {
   const workbook = new FakeWorkbook();
   workbook.create('raw-data', 2000, 20).markFormattedLastRow(999);
   workbook.create('runs', 500, 13).markFormattedLastRow(499);
@@ -875,7 +1064,7 @@ test('generated workbook-local script appends after last non-empty key row when 
     weekSheetName: '2026-W22'
   });
 
-  assert.deepEqual(executeWorkbookRunScript(script, workbook), {
+  assert.deepEqual(await executeWorkbookRunScript(script, workbook), {
     success: true,
     inserted: 1,
     updated: 0,
