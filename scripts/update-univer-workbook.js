@@ -484,7 +484,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       .map(({ row, rawRowNumber }) => ({
         rawRowNumber,
         sourceType: stringValue(row[1]),
-        score: Number.isFinite(Number(row[14])) ? Number(row[14]) : ''
+        score: stringValue(row[14]) === '' || !Number.isFinite(Number(row[14])) ? '' : Number(row[14])
       }));
   }
 
@@ -519,6 +519,11 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return "='raw-data'!" + column + rowNumber;
   }
 
+  function scoreFormula(rowNumber) {
+    const cell = "'raw-data'!O" + rowNumber;
+    return '=IF(' + cell + '="","",' + cell + ')';
+  }
+
   function sourceTypeFormula(rowNumber) {
     const cell = "'raw-data'!B" + rowNumber;
     return '=IF(' + cell + '="x","X",IF(' + cell + '="podcast","Podcast",IF(' + cell + '="blog","Blog",' + cell + ')))';
@@ -539,7 +544,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       rawFormula('L', rawRow),
       rawFormula('M', rawRow),
       rawFormula('N', rawRow),
-      rawFormula('O', rawRow),
+      scoreFormula(rawRow),
       rawFormula('G', rawRow),
       rawFormula('A', rawRow)
     ];
@@ -559,7 +564,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
 
   function medianScoreFormula() {
     if (!payload.weekStartDate || !payload.weekEndDate) return '';
-    return '=IFERROR(MEDIAN(FILTER(\\'raw-data\\'!O:O,\\'raw-data\\'!J:J>=\\\"' + payload.weekStartDate + '\\\",\\'raw-data\\'!J:J<=\\\"' + payload.weekEndDate + '\\\")),"-")';
+    return '=IF(COUNT(H12:H2000)>0,MEDIAN(H12:H2000),"-")';
   }
 
   function lowScoreFormula() {
@@ -664,6 +669,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
   }
 
   function scoreFill(score) {
+    if (score === '' || score === null || score === undefined) return COLORS.card;
     const value = Number(score);
     if (!Number.isFinite(value)) return COLORS.card;
     if (value >= 80) return COLORS.greenSoft;
@@ -856,11 +862,14 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       .setVerticalAlignment('middle');
 
     sheet.getRange('A3:J3').setBackgroundColor(COLORS.sheet);
-    sheet.getRange('A3:J3').setValues([['Source', 'All', 'Score', '0-100', 'Topic', 'All', 'Date -> Week', 'Sort', 'Signal', 'View -> Digest']]);
+    sheet.getRange('A3:J3').setValues([['Source', 'All', 'Score', '0-100', 'Topic', 'All', 'Date\\nWeek', 'Sort', 'Signal', 'View\\nDigest']]);
     ['A3:B3', 'C3:D3', 'E3:F3', 'G3', 'H3:I3', 'J3'].forEach(a1 => {
       sheet.getRange(a1)
         .setBackgroundColor(COLORS.card)
         .setFontColor(COLORS.muted)
+        .setFontSize(9)
+        .setWrap(true)
+        .setHorizontalAlignment('center')
         .setVerticalAlignment('middle');
       setOutsideBorder(sheet.getRange(a1));
     });
@@ -883,7 +892,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     kpiBlocks.forEach(block => {
       if (block.labelRange.includes(':')) sheet.getRange(block.labelRange).merge({ isForceMerge: true });
       if (block.valueRange.includes(':')) sheet.getRange(block.valueRange).merge({ isForceMerge: true });
-      setA1Value(sheet, block.labelCell, block.label);
+      setA1Value(sheet, block.labelCell, block.label.toUpperCase());
       setA1Value(sheet, block.valueCell, block.value);
       sheet.getRange(block.cardRange)
         .setBackgroundColor(block.color)
@@ -891,6 +900,11 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
         .setFontWeight('bold')
         .setHorizontalAlignment('center')
         .setVerticalAlignment('middle');
+      sheet.getRange(block.labelRange).setFontSize(9);
+      sheet.getRange(block.valueRange).setFontSize(18).setFontWeight('bold');
+      if (typeof sheet.getRange(block.cardRange).setBorder === 'function') {
+        sheet.getRange(block.cardRange).setBorder(univerAPI.Enum.BorderType.OUTSIDE, univerAPI.Enum.BorderStyleTypes.THIN, COLORS.sheet);
+      }
     });
 
     sheet.getRange('A6:D10').setBackgroundColor(COLORS.card);
@@ -967,13 +981,14 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       });
     }
 
-    const widths = [104, 76, 150, 300, 420, 340, 170, 86, 300, 180];
+    const widths = [78, 58, 118, 220, 260, 220, 120, 62, 150, 86];
     widths.forEach((width, index) => sheet.setColumnWidth(index, width));
     sheet.setColumnWidths(HELPER_COLUMN, HELPER_WIDTH, 120);
     sheet.setRowHeight(0, 42);
     sheet.setRowHeight(1, 28);
-    sheet.setRowHeight(2, 34);
-    sheet.setRowHeights(3, 2, 32);
+    sheet.setRowHeight(2, 26);
+    sheet.setRowHeight(3, 24);
+    sheet.setRowHeight(4, 34);
     sheet.setRowHeights(5, 5, 28);
     sheet.setRowHeight(DISPLAY_HEADER_ROW, 32);
 

@@ -284,9 +284,9 @@
     sheet.getRange('A2:J2').setBackgroundColor(COLORS.metadata).setFontColor(COLORS.panelText).setVerticalAlignment('middle');
 
     sheet.getRange('A3:J3').setBackgroundColor(COLORS.sheet);
-    sheet.getRange('A3:J3').setValues([['Source', 'All', 'Score', '0-100', 'Topic', 'All', 'Date -> Week', 'Sort', 'Signal', 'View -> Digest']]);
+    sheet.getRange('A3:J3').setValues([['Source', 'All', 'Score', '0-100', 'Topic', 'All', 'Date\nWeek', 'Sort', 'Signal', 'View\nDigest']]);
     ['A3:B3', 'C3:D3', 'E3:F3', 'G3', 'H3:I3', 'J3'].forEach(a1 => {
-      sheet.getRange(a1).setBackgroundColor(COLORS.card).setFontColor(COLORS.muted).setVerticalAlignment('middle');
+      sheet.getRange(a1).setBackgroundColor(COLORS.card).setFontColor(COLORS.muted).setFontSize(9).setWrap(true).setHorizontalAlignment('center').setVerticalAlignment('middle');
       setOutsideBorder(sheet.getRange(a1));
     });
     ['B3', 'D3', 'F3', 'G3', 'I3', 'J3'].forEach(a1 => sheet.getRange(a1).setFontWeight('bold').setFontColor(COLORS.text));
@@ -296,15 +296,20 @@
       { label: 'X', value: "=COUNTIFS('raw-data'!J:J,\">=<weekStart>\",'raw-data'!J:J,\"<=<weekEnd>\",'raw-data'!B:B,\"x\")", cardRange: 'C4:D5', labelRange: 'C4:D4', valueRange: 'C5:D5', labelCell: 'C4', valueCell: 'C5', color: COLORS.x },
       { label: 'Podcast', value: "=COUNTIFS('raw-data'!J:J,\">=<weekStart>\",'raw-data'!J:J,\"<=<weekEnd>\",'raw-data'!B:B,\"podcast\")", cardRange: 'E4:F5', labelRange: 'E4:F4', valueRange: 'E5:F5', labelCell: 'E4', valueCell: 'E5', color: COLORS.podcast },
       { label: 'Blog', value: "=COUNTIFS('raw-data'!J:J,\">=<weekStart>\",'raw-data'!J:J,\"<=<weekEnd>\",'raw-data'!B:B,\"blog\")", cardRange: 'G4:H5', labelRange: 'G4:H4', valueRange: 'G5:H5', labelCell: 'G4', valueCell: 'G5', color: COLORS.blog },
-      { label: 'Median', value: "=IFERROR(MEDIAN(FILTER('raw-data'!O:O,'raw-data'!J:J>=<weekStart>,'raw-data'!J:J<=<weekEnd>)),\"-\")", cardRange: 'I4:I5', labelRange: 'I4:I4', valueRange: 'I5:I5', labelCell: 'I4', valueCell: 'I5', color: COLORS.median },
+      { label: 'Median', value: '=IF(COUNT(H12:H2000)>0,MEDIAN(H12:H2000),"-")', cardRange: 'I4:I5', labelRange: 'I4:I4', valueRange: 'I5:I5', labelCell: 'I4', valueCell: 'I5', color: COLORS.median },
       { label: 'Low Score', value: "=COUNTIFS('raw-data'!J:J,\">=<weekStart>\",'raw-data'!J:J,\"<=<weekEnd>\",'raw-data'!O:O,\"<50\")", cardRange: 'J4:J5', labelRange: 'J4:J4', valueRange: 'J5:J5', labelCell: 'J4', valueCell: 'J5', color: COLORS.lowScore }
     ];
     kpiBlocks.forEach(block => {
       if (block.labelRange.includes(':')) sheet.getRange(block.labelRange).merge({ isForceMerge: true });
       if (block.valueRange.includes(':')) sheet.getRange(block.valueRange).merge({ isForceMerge: true });
-      sheet.getRange(block.labelCell).setValue(block.label);
+      sheet.getRange(block.labelCell).setValue(block.label.toUpperCase());
       sheet.getRange(block.valueCell).setValue(block.value);
       sheet.getRange(block.cardRange).setBackgroundColor(block.color).setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sheet.getRange(block.labelRange).setFontSize(9);
+      sheet.getRange(block.valueRange).setFontSize(18).setFontWeight('bold');
+      if (typeof sheet.getRange(block.cardRange).setBorder === 'function') {
+        sheet.getRange(block.cardRange).setBorder(univerAPI.Enum.BorderType.OUTSIDE, univerAPI.Enum.BorderStyleTypes.THIN, COLORS.sheet);
+      }
     });
 
     sheet.getRange('A6:D10').setBackgroundColor(COLORS.card);
@@ -366,13 +371,14 @@
     sheet.getRange(WEEK_HEADER_ROW, 0, 1, WEEK_DISPLAY_HEADERS.length).setValues([WEEK_DISPLAY_HEADERS]);
     styleHeader(sheet.getRange(WEEK_HEADER_ROW, 0, 1, WEEK_DISPLAY_HEADERS.length), COLORS.tableHeader);
 
-    const widths = [104, 76, 150, 300, 420, 340, 170, 86, 300, 180];
+    const widths = [78, 58, 118, 220, 260, 220, 120, 62, 150, 86];
     widths.forEach((width, index) => sheet.setColumnWidth(index, width));
     setColumnWidths(sheet, HELPER_COLUMN, HELPER_WIDTH, 120);
     sheet.setRowHeight(0, 42);
     sheet.setRowHeight(1, 28);
-    sheet.setRowHeight(2, 34);
-    sheet.setRowHeights(3, 2, 32);
+    sheet.setRowHeight(2, 26);
+    sheet.setRowHeight(3, 24);
+    sheet.setRowHeight(4, 34);
     sheet.setRowHeights(5, 5, 28);
     sheet.setRowHeight(WEEK_HEADER_ROW, 32);
     sheet.setRowHeights(WEEK_DATA_START_ROW, 80, 64);

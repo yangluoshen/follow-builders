@@ -104,6 +104,11 @@ function toTopicText(value) {
   return value ? String(value) : '';
 }
 
+function numericOrBlank(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  return Number.isFinite(Number(value)) ? Number(value) : '';
+}
+
 function requireString(value, label) {
   if (!value || typeof value !== 'string') throw new Error(`${label} is required`);
 }
@@ -157,10 +162,10 @@ export function mapItemToRawRow(item, updatedAt = item.updatedAt || '') {
     item.summary || '',
     toListText(item.keyPoints),
     toTopicText(item.topics),
-    Number.isFinite(Number(item.importanceScore)) ? Number(item.importanceScore) : '',
-    Number.isFinite(Number(item.likes)) ? Number(item.likes) : '',
-    Number.isFinite(Number(item.retweets)) ? Number(item.retweets) : '',
-    Number.isFinite(Number(item.replies)) ? Number(item.replies) : '',
+    numericOrBlank(item.importanceScore),
+    numericOrBlank(item.likes),
+    numericOrBlank(item.retweets),
+    numericOrBlank(item.replies),
     item.rawSourceKey || '',
     updatedAt
   ];
@@ -185,7 +190,7 @@ export function groupWeeklyDisplayRows(items) {
       item.summary || '',
       toListText(item.keyPoints),
       toTopicText(item.topics),
-      Number.isFinite(Number(item.importanceScore)) ? Number(item.importanceScore) : '',
+      numericOrBlank(item.importanceScore),
       item.url || '',
       item.contentId || ''
     ]);

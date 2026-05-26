@@ -87,8 +87,18 @@ class ScaffoldFakeRange {
   clear() { return this; }
   clearContent() { return this; }
   merge() { return this; }
-  setValue() { return this; }
-  setValues() { return this; }
+  setValue(value) {
+    this.sheet.setCell(this.row, this.column, value);
+    return this;
+  }
+  setValues(values) {
+    values.forEach((row, rowOffset) => {
+      row.forEach((value, columnOffset) => {
+        this.sheet.setCell(this.row + rowOffset, this.column + columnOffset, value);
+      });
+    });
+    return this;
+  }
   setFontWeight() { return this; }
   setFontColor() { return this; }
   setFontSize() { return this; }
@@ -108,6 +118,8 @@ class ScaffoldFakeSheet {
       rows,
       columns,
       options,
+      cells: new Map(),
+      columnWidths: new Map(),
       conditionalFormattingRules: [],
       sheetId: `sheet-${name}`
     });
@@ -118,6 +130,12 @@ class ScaffoldFakeSheet {
 
   getSheetName() { return this.name; }
   getSheetId() { return this.sheetId; }
+  key(row, column) { return `${row}:${column}`; }
+  setCell(row, column, value) {
+    if (value === '') this.cells.delete(this.key(row, column));
+    else this.cells.set(this.key(row, column), value);
+  }
+  getCell(row, column) { return this.cells.get(this.key(row, column)) ?? ''; }
   getLastRow() { return 0; }
   getLastColumn() { return 0; }
   getMaxRows() { return this.rows; }
@@ -131,8 +149,11 @@ class ScaffoldFakeSheet {
   setFrozenColumns() { return this; }
   setRowHeight() { return this; }
   setRowHeights() { return this; }
-  setColumnWidth() { return this; }
-  setColumnWidths() { return this; }
+  setColumnWidth(index, width) { this.columnWidths.set(index, width); return this; }
+  setColumnWidths(start, count, width) {
+    for (let index = 0; index < count; index += 1) this.columnWidths.set(start + index, width);
+    return this;
+  }
   hideColumns() { return this; }
   clearConditionalFormatRules() { this.conditionalFormattingRules = []; return this; }
   addConditionalFormattingRule(rule) { this.conditionalFormattingRules.push(rule); return this; }
@@ -207,6 +228,32 @@ test('scaffold grows an existing narrow week template before writing helper colu
 
   assert.equal(result.success, true, result.error);
   assert.equal(weekSheet.columns, 15);
+});
+
+test('scaffold uses compact week template controls, KPIs, and visible column widths', async () => {
+  const weekSheet = new ScaffoldFakeSheet('_week-template', 240, 15);
+  const workbook = new ScaffoldFakeWorkbook([
+    new ScaffoldFakeSheet('raw-data', 1000, 20),
+    new ScaffoldFakeSheet('runs', 500, 13),
+    weekSheet
+  ]);
+
+  const result = await runScaffoldWithWorkbook(workbook);
+
+  assert.equal(result.success, true, result.error);
+  assert.equal(weekSheet.getCell(2, 6), 'Date\nWeek');
+  assert.equal(weekSheet.getCell(2, 7), 'Sort');
+  assert.equal(weekSheet.getCell(2, 8), 'Signal');
+  assert.equal(weekSheet.getCell(2, 9), 'View\nDigest');
+  assert.equal(weekSheet.getCell(3, 8), 'MEDIAN');
+  assert.equal(weekSheet.getCell(3, 9), 'LOW SCORE');
+  assert.equal(weekSheet.getCell(4, 8), '=IF(COUNT(H12:H2000)>0,MEDIAN(H12:H2000),"-")');
+  assert.doesNotMatch(weekSheet.getCell(4, 8), /VALUE\(/);
+  assert.doesNotMatch(weekSheet.getCell(4, 8), /O:O|J:J|O2:O|J2:J|<weekStart>/);
+  assert.deepEqual(
+    Array.from({ length: 10 }, (_, index) => weekSheet.columnWidths.get(index)),
+    [78, 58, 118, 220, 260, 220, 120, 62, 150, 86]
+  );
 });
 
 test('scaffold skips conditional formatting when partial CF APIs are unavailable', async () => {

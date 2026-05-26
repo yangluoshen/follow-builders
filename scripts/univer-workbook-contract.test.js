@@ -187,6 +187,36 @@ test('mapItemToRawRow uses blank updatedAt when none is provided', () => {
   assert.equal(row[19], '');
 });
 
+test('mapItemToRawRow preserves blank numeric fields instead of coercing them to zero', () => {
+  const row = mapItemToRawRow({
+    contentId: 'x:blank-score',
+    importanceScore: '',
+    likes: '',
+    retweets: null,
+    replies: undefined
+  });
+
+  assert.equal(row[14], '');
+  assert.equal(row[15], '');
+  assert.equal(row[16], '');
+  assert.equal(row[17], '');
+});
+
+test('groupWeeklyDisplayRows preserves blank scores instead of coercing them to zero', () => {
+  const rows = groupWeeklyDisplayRows([
+    {
+      contentId: 'x:blank-score',
+      sourceType: 'x',
+      sourceName: 'X',
+      title: 'Blank score',
+      importanceScore: '',
+      runDate: '2026-05-26'
+    }
+  ]);
+
+  assert.equal(rows[0][7], '');
+});
+
 test('groupWeeklyDisplayRows sorts and maps rows for weekly display', () => {
   const rows = groupWeeklyDisplayRows([
     { contentId: 'blog:1', sourceType: 'blog', sourceName: 'Claude Blog', title: 'Blog', summary: 'B', keyPoints: ['b'], topics: ['release'], importanceScore: 60, url: 'https://example.com/b', publishedAt: '2026-05-25T01:00:00.000Z', runDate: '2026-05-25' },
