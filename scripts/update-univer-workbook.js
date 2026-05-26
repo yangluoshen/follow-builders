@@ -476,25 +476,25 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     sheet.getRange('A2').setValue(humanDateRange() + ' · Generated ' + payload.runRecord.finishedAt + ' · ' + (payload.runRecord.publicUrl || 'Local workbook'));
     sheet.getRange('A2:J2').setBackgroundColor('#EAF2F8').setFontColor(COLORS.text).setVerticalAlignment('middle');
 
-    sheet.getRange('A5:B5').merge({ isForceMerge: true }).setValue(rows.length);
-    sheet.getRange('C5:D5').merge({ isForceMerge: true }).setValue(counts.x);
-    sheet.getRange('E5:F5').merge({ isForceMerge: true }).setValue(counts.podcast);
-    sheet.getRange('G5:H5').merge({ isForceMerge: true }).setValue(counts.blog);
-    sheet.getRange('I5:J5').merge({ isForceMerge: true }).setValue(averageScore === '' ? '—' : averageScore);
+    sheet.getRange('A4:B5').merge({ isForceMerge: true }).setValue(rows.length);
+    sheet.getRange('C4:D5').merge({ isForceMerge: true }).setValue(counts.x);
+    sheet.getRange('E4:F5').merge({ isForceMerge: true }).setValue(counts.podcast);
+    sheet.getRange('G4:H5').merge({ isForceMerge: true }).setValue(counts.blog);
+    sheet.getRange('I4:J5').merge({ isForceMerge: true }).setValue(averageScore === '' ? '—' : averageScore);
     [
-      ['A5:B5', COLORS.titleSoft],
-      ['C5:D5', COLORS.x],
-      ['E5:F5', COLORS.podcast],
-      ['G5:H5', COLORS.blog],
-      ['I5:J5', COLORS.green]
+      ['A4:B5', COLORS.titleSoft],
+      ['C4:D5', COLORS.x],
+      ['E4:F5', COLORS.podcast],
+      ['G4:H5', COLORS.blog],
+      ['I4:J5', COLORS.green]
     ].forEach(([a1, color]) => {
       sheet.getRange(a1).setBackgroundColor(color).setFontColor('#FFFFFF').setFontWeight('bold').setFontSize(18).setHorizontalAlignment('center').setVerticalAlignment('middle');
     });
-    sheet.getRange('A4').setValue('Items');
-    sheet.getRange('C4').setValue('X');
-    sheet.getRange('E4').setValue('Podcast');
-    sheet.getRange('G4').setValue('Blog');
-    sheet.getRange('I4').setValue('Avg Score');
+    sheet.getRange('A3').setValue('Items');
+    sheet.getRange('C3').setValue('X');
+    sheet.getRange('E3').setValue('Podcast');
+    sheet.getRange('G3').setValue('Blog');
+    sheet.getRange('I3').setValue('Avg Score');
 
     const topXSummary = highlightSummary(topX);
     const podcastSummary = highlightSummary(topPodcast);

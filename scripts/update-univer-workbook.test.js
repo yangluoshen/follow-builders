@@ -502,6 +502,20 @@ function a1ToIndexes(a1) {
   };
 }
 
+function assertMergedRange(sheet, a1) {
+  const expected = a1ToIndexes(a1);
+  assert.ok(
+    sheet.merges.some(merge => (
+      merge.row === expected.row &&
+      merge.column === expected.column &&
+      merge.rowCount === expected.rowCount &&
+      merge.columnCount === expected.columnCount &&
+      merge.options.isForceMerge === true
+    )),
+    `expected merged range ${a1}`
+  );
+}
+
 class FakeSheet {
   constructor(name) {
     this.name = name;
@@ -759,11 +773,17 @@ test('generated workbook-local script renders editorial dashboard metrics and hi
   assert.equal(weekSheet.frozenColumns, 2);
   assert.equal(weekSheet.getCell(0, 0), '2026-W22 Follow Builders');
   assert.match(weekSheet.getCell(1, 0), /May 25 - May 31/);
-  assert.equal(weekSheet.getCell(3, 0), 'Items');
-  assert.equal(weekSheet.getCell(4, 0), 3);
-  assert.equal(weekSheet.getCell(4, 2), 1);
-  assert.equal(weekSheet.getCell(4, 4), 1);
-  assert.equal(weekSheet.getCell(4, 6), 1);
+  assert.equal(weekSheet.getCell(2, 0), 'Items');
+  assert.equal(weekSheet.getCell(2, 2), 'X');
+  assert.equal(weekSheet.getCell(2, 4), 'Podcast');
+  assert.equal(weekSheet.getCell(2, 6), 'Blog');
+  assert.equal(weekSheet.getCell(2, 8), 'Avg Score');
+  assert.equal(weekSheet.getCell(3, 0), 3);
+  assert.equal(weekSheet.getCell(3, 2), 1);
+  assert.equal(weekSheet.getCell(3, 4), 1);
+  assert.equal(weekSheet.getCell(3, 6), 1);
+  assert.equal(weekSheet.getCell(3, 8), 84);
+  ['A4:B5', 'C4:D5', 'E4:F5', 'G4:H5', 'I4:J5'].forEach(a1 => assertMergedRange(weekSheet, a1));
   assert.equal(weekSheet.getCell(6, 0), 'Top X');
   assert.equal(weekSheet.getCell(7, 0), 'Agent update');
   assert.equal(weekSheet.getCell(6, 3), 'Top Podcast');
