@@ -376,6 +376,10 @@ The scaffold runs only during initial setup or explicit forced reinitialization
 (`--force`). Daily digest runs, workbook updates, and cron jobs must not run the
 scaffold; they update the already initialized workbook only.
 
+For an existing workbook that is already bound to a remote unit, do not use
+`univer clone`. Use `univer pull` or `univer sync` against the existing local
+workbook path.
+
 ### Workbook Contract
 
 - `raw-data` is the only fact table. It is append-oriented and keyed by
