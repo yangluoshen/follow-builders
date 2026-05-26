@@ -10,7 +10,7 @@ import {
   updateConfigFile,
   userWorkbookPath
 } from './lib/follow-builders-config.js';
-import { runUniver } from './lib/univer-command.js';
+import { runUniver, runUniverJson } from './lib/univer-command.js';
 
 async function writeExecutable(path, text) {
   await writeFile(path, text, 'utf-8');
@@ -54,5 +54,48 @@ test('runUniver throws with stderr on failure', async t => {
   await assert.rejects(
     () => runUniver(['sync', './book.univer'], { univerPath: fake }),
     /univer sync .* failed with exit code 9: bad command/
+  );
+});
+
+test('runUniverJson appends json flag and parses stdout', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'fb-univer-bin-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const fake = join(dir, 'univer');
+  await writeExecutable(fake, '#!/bin/sh\nprintf \'{"args":"%s"}\' "$*"\n');
+
+  const result = await runUniverJson(['inspect', 'workbook', './book.univer'], { univerPath: fake });
+  assert.deepEqual(result, { args: 'inspect workbook ./book.univer --json' });
+});
+
+test('runUniverJson wraps invalid json errors with command context', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'fb-univer-bin-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const fake = join(dir, 'univer');
+  await writeExecutable(fake, '#!/bin/sh\nprintf "not json"\n');
+
+  await assert.rejects(
+    () => runUniverJson(['inspect', 'workbook', './book.univer'], { univerPath: fake }),
+    /^Error: Could not parse univer JSON output for inspect workbook \.\/book\.univer:/
+  );
+});
+
+test('runUniver wraps spawn errors with command context', async () => {
+  const missing = join(tmpdir(), 'missing-univer-bin');
+
+  await assert.rejects(
+    () => runUniver(['inspect', 'workbook'], { univerPath: missing }),
+    new RegExp(`Could not run univer ${missing} inspect workbook: .*`)
+  );
+});
+
+test('runUniver reports signal termination separately from exit codes', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'fb-univer-bin-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const fake = join(dir, 'univer');
+  await writeExecutable(fake, '#!/bin/sh\nkill -TERM $$\n');
+
+  await assert.rejects(
+    () => runUniver(['sync', './book.univer'], { univerPath: fake }),
+    /univer sync .* failed with signal SIGTERM/
   );
 });

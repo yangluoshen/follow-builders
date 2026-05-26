@@ -4,6 +4,8 @@ export function runUniver(args, options = {}) {
   const univerPath = options.univerPath || process.env.FOLLOW_BUILDERS_UNIVER_PATH || 'univer';
   const cwd = options.cwd || process.cwd();
   const env = options.env || process.env;
+  const command = ['univer', ...args].join(' ');
+  const attemptedCommand = [univerPath, ...args].join(' ');
 
   return new Promise((resolve, reject) => {
     const child = spawn(univerPath, args, {
@@ -16,12 +18,18 @@ export function runUniver(args, options = {}) {
 
     child.stdout.on('data', chunk => stdout.push(chunk));
     child.stderr.on('data', chunk => stderr.push(chunk));
-    child.on('error', reject);
-    child.on('close', code => {
+    child.on('error', err => {
+      reject(new Error(`Could not run univer ${attemptedCommand}: ${err.message}`));
+    });
+    child.on('close', (code, signal) => {
       const out = Buffer.concat(stdout).toString('utf-8');
       const err = Buffer.concat(stderr).toString('utf-8');
+      if (signal) {
+        reject(new Error(`${command} failed with signal ${signal}`));
+        return;
+      }
       if (code !== 0) {
-        reject(new Error(`univer ${args.join(' ')} failed with exit code ${code}: ${err.trim() || out.trim()}`));
+        reject(new Error(`${command} failed with exit code ${code}: ${err.trim() || out.trim()}`));
         return;
       }
       resolve({ stdout: out, stderr: err });
