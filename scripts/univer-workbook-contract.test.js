@@ -1,12 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PUBLIC_URL_PREFIX,
   RAW_DATA_HEADERS,
   RUNS_HEADERS,
+  SHEETS,
+  USER_WORKBOOK_NAME,
+  WEEK_DISPLAY_HEADERS,
+  WORKBOOK_TEMPLATE_PATH,
   appendWorkbookUrl,
   buildContentId,
   groupWeeklyDisplayRows,
   mapItemToRawRow,
+  normalizeBlogUrl,
+  publicUrlForUnit,
   validateItemsPayload
 } from './lib/univer-workbook-contract.js';
 
@@ -48,6 +55,36 @@ test('exports fixed raw-data and runs headers', () => {
     'publicUrl',
     'errorSummary'
   ]);
+});
+
+test('exports fixed workbook constants and sheet headers', () => {
+  assert.equal(WORKBOOK_TEMPLATE_PATH, 'templates/follow-builders.univer');
+  assert.equal(USER_WORKBOOK_NAME, 'follow-builders.univer');
+  assert.equal(PUBLIC_URL_PREFIX, 'https://univer.ai/space/sheets/');
+  assert.deepEqual(SHEETS, {
+    rawData: 'raw-data',
+    runs: 'runs',
+    weekTemplate: '_week-template'
+  });
+  assert.deepEqual(WEEK_DISPLAY_HEADERS, [
+    'Date',
+    'Type',
+    'Source',
+    'Title',
+    'Summary',
+    'Key Points',
+    'Topics',
+    'Score',
+    'URL',
+    'contentId'
+  ]);
+});
+
+test('normalizeBlogUrl strips hash and tracking while normalizing path', () => {
+  assert.equal(
+    normalizeBlogUrl('https://example.com/Posts/Hello/?utm_source=x&utm_medium=social&ref=feed#top'),
+    'https://example.com/posts/hello?ref=feed'
+  );
 });
 
 test('buildContentId creates stable ids for each source type', () => {
@@ -115,14 +152,54 @@ test('mapItemToRawRow aligns item fields to RAW_DATA_HEADERS', () => {
   assert.equal(row[14], 88);
 });
 
-test('groupWeeklyDisplayRows sorts dates descending and sources X, Podcast, Blog', () => {
+test('mapItemToRawRow uses blank updatedAt when none is provided', () => {
+  const row = mapItemToRawRow({ contentId: 'x:1' });
+
+  assert.equal(row[19], '');
+});
+
+test('groupWeeklyDisplayRows sorts and maps rows for weekly display', () => {
   const rows = groupWeeklyDisplayRows([
     { contentId: 'blog:1', sourceType: 'blog', sourceName: 'Claude Blog', title: 'Blog', summary: 'B', keyPoints: ['b'], topics: ['release'], importanceScore: 60, url: 'https://example.com/b', publishedAt: '2026-05-25T01:00:00.000Z', runDate: '2026-05-25' },
     { contentId: 'podcast:1', sourceType: 'podcast', sourceName: 'Latent Space', title: 'Podcast', summary: 'P', keyPoints: ['p'], topics: ['research'], importanceScore: 70, url: 'https://youtube.com/p', publishedAt: '2026-05-26T01:00:00.000Z', runDate: '2026-05-26' },
-    { contentId: 'x:1', sourceType: 'x', sourceName: 'X', title: 'Tweet', summary: 'X', keyPoints: ['x'], topics: ['agents'], importanceScore: 90, url: 'https://x.com/a/status/1', publishedAt: '2026-05-26T02:00:00.000Z', runDate: '2026-05-26' }
+    { contentId: 'x:older', sourceType: 'x', sourceName: 'X', title: 'Older tweet', summary: 'Older', keyPoints: ['older'], topics: ['agents'], importanceScore: 99, url: 'https://x.com/a/status/older', publishedAt: '2026-05-26T01:00:00.000Z', runDate: '2026-05-26' },
+    { contentId: 'x:tie-low', sourceType: 'x', sourceName: 'X', title: 'Tie low', summary: 'Low', keyPoints: ['low', 'detail'], topics: ['agents', 'tools'], importanceScore: 70, url: 'https://x.com/a/status/tie-low', publishedAt: '2026-05-26T02:00:00.000Z', runDate: '2026-05-26' },
+    { contentId: 'x:tie-high', sourceType: 'x', sourceName: 'X', title: 'Tie high', summary: 'High', keyPoints: ['high'], topics: ['agents'], importanceScore: 90, url: 'https://x.com/a/status/tie-high', publishedAt: '2026-05-26T02:00:00.000Z', runDate: '2026-05-26' },
+    { contentId: 'x:newer', sourceType: 'x', sourceName: 'X', title: 'Newer tweet', summary: 'Newer', keyPoints: ['newer'], topics: ['agents'], importanceScore: 80, url: 'https://x.com/a/status/newer', publishedAt: '2026-05-26T03:00:00.000Z', runDate: '2026-05-26' }
   ]);
-  assert.deepEqual(rows.map(row => row[0]), ['2026-05-26', '2026-05-26', '2026-05-25']);
-  assert.deepEqual(rows.map(row => row[1]), ['X', 'Podcast', 'Blog']);
+
+  assert.deepEqual(rows.map(row => row[0]), ['2026-05-26', '2026-05-26', '2026-05-26', '2026-05-26', '2026-05-26', '2026-05-25']);
+  assert.deepEqual(rows.map(row => row[1]), ['X', 'X', 'X', 'X', 'Podcast', 'Blog']);
+  assert.deepEqual(rows.map(row => row[9]), ['x:newer', 'x:tie-high', 'x:tie-low', 'x:older', 'podcast:1', 'blog:1']);
+  assert.deepEqual(rows[1], [
+    '2026-05-26',
+    'X',
+    'X',
+    'Tie high',
+    'High',
+    'high',
+    'agents',
+    90,
+    'https://x.com/a/status/tie-high',
+    'x:tie-high'
+  ]);
+  assert.deepEqual(rows[2], [
+    '2026-05-26',
+    'X',
+    'X',
+    'Tie low',
+    'Low',
+    'low\n- detail',
+    'agents, tools',
+    70,
+    'https://x.com/a/status/tie-low',
+    'x:tie-low'
+  ]);
+});
+
+test('publicUrlForUnit builds public workbook URLs', () => {
+  assert.equal(publicUrlForUnit('unit-1'), 'https://univer.ai/space/sheets/unit-1');
+  assert.equal(publicUrlForUnit(''), null);
 });
 
 test('appendWorkbookUrl appends one link and avoids duplicates', () => {
@@ -130,4 +207,7 @@ test('appendWorkbookUrl appends one link and avoids duplicates', () => {
   assert.match(once, /Univer workbook: https:\/\/univer\.ai\/space\/sheets\/unit-1/);
   const twice = appendWorkbookUrl(once, 'https://univer.ai/space/sheets/unit-1');
   assert.equal(twice.match(/Univer workbook:/g).length, 1);
+  const replaced = appendWorkbookUrl(once, 'https://univer.ai/space/sheets/unit-2');
+  assert.equal(replaced.match(/Univer workbook:/g).length, 1);
+  assert.match(replaced, /Univer workbook: https:\/\/univer\.ai\/space\/sheets\/unit-2/);
 });

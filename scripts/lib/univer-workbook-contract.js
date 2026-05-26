@@ -123,7 +123,7 @@ export function validateItemsPayload(payload) {
   return payload;
 }
 
-export function mapItemToRawRow(item, updatedAt = item.updatedAt || new Date().toISOString()) {
+export function mapItemToRawRow(item, updatedAt = item.updatedAt || '') {
   return [
     item.contentId,
     item.sourceType || '',
@@ -176,7 +176,10 @@ export function groupWeeklyDisplayRows(items) {
 export function appendWorkbookUrl(markdown, publicUrl) {
   if (!publicUrl) return markdown;
   const line = `Univer workbook: ${publicUrl}`;
-  if (markdown.includes(line)) return markdown;
+  const workbookLinePattern = /^Univer workbook: .*$/m;
+  if (workbookLinePattern.test(markdown)) {
+    return markdown.replace(workbookLinePattern, line);
+  }
   return `${markdown.trimEnd()}\n\n${line}\n`;
 }
 
