@@ -233,6 +233,10 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     return workbook.getSheetByName(name) || workbook.create(name, rows, columns);
   }
 
+  function weeklySheetRows(rowCount) {
+    return Math.max(120, DISPLAY_DATA_ROW + TABLE_CLEAR_EXTRA_ROWS + rowCount + 30);
+  }
+
   function setHeader(sheet, headers) {
     sheet.getRange(0, 0, 1, headers.length).setValues([headers]);
     sheet
@@ -562,7 +566,6 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     const workbook = univerAPI.getActiveWorkbook();
     const rawSheet = ensureSheet(workbook, payload.sheetNames.rawData, 2000, payload.rawHeaders.length);
     const runsSheet = ensureSheet(workbook, payload.sheetNames.runs, 500, payload.runsHeaders.length);
-    const weekSheet = ensureSheet(workbook, payload.sheetNames.week, Math.max(120, payload.displayRows.length + 30), payload.weekHeaders.length);
 
     assertOrInitHeader(rawSheet, payload.rawHeaders, payload.sheetNames.rawData);
     assertOrInitHeader(runsSheet, payload.runsHeaders, payload.sheetNames.runs);
@@ -572,6 +575,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     const result = upsertRawRows(rawSheet, payload.rawRows);
     appendRunRow(runsSheet, result.inserted, result.updated);
     const weeklyRows = buildWeeklyRowsFromRaw(rawSheet);
+    const weekSheet = ensureSheet(workbook, payload.sheetNames.week, weeklySheetRows(weeklyRows.length), payload.weekHeaders.length);
     renderWeeklySheet(weekSheet, result.inserted, result.updated, weeklyRows);
 
     return {

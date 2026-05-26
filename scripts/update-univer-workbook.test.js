@@ -517,8 +517,10 @@ function assertMergedRange(sheet, a1) {
 }
 
 class FakeSheet {
-  constructor(name) {
+  constructor(name, rows, columns) {
     this.name = name;
+    this.rowCapacity = rows;
+    this.columnCapacity = columns;
     this.cells = new Map();
     this.formattedLastRow = -1;
     this.formatting = [];
@@ -547,9 +549,33 @@ class FakeSheet {
   getRange(row, column, rowCount = 1, columnCount = 1) {
     if (typeof row === 'string') {
       const parsed = a1ToIndexes(row);
+      this.assertRangeInBounds(parsed.row, parsed.column, parsed.rowCount, parsed.columnCount);
       return new FakeRange(this, parsed.row, parsed.column, parsed.rowCount, parsed.columnCount);
     }
+    this.assertRangeInBounds(row, column, rowCount, columnCount);
     return new FakeRange(this, row, column, rowCount, columnCount);
+  }
+
+  assertRangeInBounds(row, column, rowCount, columnCount) {
+    if (
+      !Number.isInteger(row) ||
+      !Number.isInteger(column) ||
+      !Number.isInteger(rowCount) ||
+      !Number.isInteger(columnCount) ||
+      row < 0 ||
+      column < 0 ||
+      rowCount < 1 ||
+      columnCount < 1
+    ) {
+      throw new Error(`Invalid range on ${this.name}: row=${row} column=${column} rowCount=${rowCount} columnCount=${columnCount}`);
+    }
+    if (row + rowCount > this.rowCapacity || column + columnCount > this.columnCapacity) {
+      throw new Error(
+        `Range exceeds sheet dimensions on ${this.name}: ` +
+        `range row=${row} column=${column} rowCount=${rowCount} columnCount=${columnCount}, ` +
+        `sheet rows=${this.rowCapacity} columns=${this.columnCapacity}`
+      );
+    }
   }
 
   getLastRow() {
@@ -598,8 +624,8 @@ class FakeWorkbook {
     return this.sheets.get(name) || null;
   }
 
-  create(name) {
-    const sheet = new FakeSheet(name);
+  create(name, rows, columns) {
+    const sheet = new FakeSheet(name, rows, columns);
     this.sheets.set(name, sheet);
     return sheet;
   }
@@ -651,6 +677,7 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
   const rawSheet = workbook.getSheetByName('raw-data');
   const runsSheet = workbook.getSheetByName('runs');
   const weekSheet = workbook.getSheetByName('2026-W22');
+  assert.ok(weekSheet.rowCapacity >= 176);
   assert.equal(rawSheet.getCell(0, 0), 'contentId');
   assert.equal(runsSheet.getCell(0, 0), 'runId');
   assert.equal(rawSheet.getCell(1, 0), 'x:1');
@@ -803,8 +830,8 @@ test('generated workbook-local script renders editorial dashboard metrics and hi
 
 test('generated workbook-local script appends after last non-empty key row when sheets have formatted blank rows', () => {
   const workbook = new FakeWorkbook();
-  workbook.create('raw-data').markFormattedLastRow(999);
-  workbook.create('runs').markFormattedLastRow(499);
+  workbook.create('raw-data', 2000, 20).markFormattedLastRow(999);
+  workbook.create('runs', 500, 13).markFormattedLastRow(499);
   const firstItem = validItemsPayload().items[0];
   const script = buildWorkbookRunScript({
     rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
