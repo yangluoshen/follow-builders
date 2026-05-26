@@ -131,7 +131,7 @@ case "$last" in
 esac
 
 case "$last" in
-  *"Delivery is handled by the wrapper."*"Do not run deliver.js, Telegram/email delivery, or any delivery command/API."*"Only run prepare-digest.js, write the digest markdown file, write the workbook items JSON file, and return status."*) ;;
+  *"Delivery is handled by the wrapper."*"Do not run deliver.js, configured delivery, or any delivery command/API."*"Only run prepare-digest.js, write the digest markdown file, write the workbook items JSON file, and return status."*) ;;
   *)
     echo "prompt did not explicitly forbid Codex delivery" >&2
     exit 46
@@ -412,4 +412,63 @@ writeFileSync(process.env.DELIVERED_TEXT_PATH, readFileSync(process.argv[fileArg
   const text = await readFile(deliveredText, 'utf-8');
   assert.match(text, /Digest for Telegram delivery/);
   assert.match(text, new RegExp(`Univer workbook: ${publicUrl}`));
+});
+
+test('delivery targets use deliver wrapper instead of stdout shortcut', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const fakeCodex = join(home, 'fake-codex.js');
+  const fakeDeliver = join(home, 'fake-deliver.js');
+  const deliveredText = join(home, 'delivered-targets.txt');
+
+  await writeConfig(home, {
+    cron: { agent: 'codex' },
+    delivery: {
+      targets: [
+        { method: 'discord' },
+        { method: 'telegram', chatId: 'chat' }
+      ]
+    },
+    univer: { enabled: false }
+  });
+
+  await writeExecutable(fakeCodex, `#!/usr/bin/env node
+const { writeFileSync } = require('node:fs');
+const args = process.argv.slice(2);
+let finalMessagePath = null;
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] === '--output-last-message') finalMessagePath = args[i + 1];
+}
+const prompt = args.at(-1);
+const digestMatch = prompt.match(/^5\\. Write only the final digest markdown text to (.*)\\.$/m);
+const itemsJsonMatch = prompt.match(/^6\\. Write the structured workbook items JSON to (.*)\\.$/m);
+writeFileSync(digestMatch[1], 'Digest for delivery targets');
+writeFileSync(itemsJsonMatch[1], JSON.stringify({
+  runId: 'test-run',
+  generatedAt: '2026-05-26T00:00:00.000Z',
+  items: [],
+  presentationHints: { weeklyThemes: [], highlightContentIds: [] }
+}));
+writeFileSync(finalMessagePath, 'Digest prepared.');
+`);
+
+  await writeExecutable(fakeDeliver, `#!/usr/bin/env node
+const { readFileSync, writeFileSync } = require('node:fs');
+const fileArgIndex = process.argv.indexOf('--file');
+writeFileSync(process.env.DELIVERED_TEXT_PATH, readFileSync(process.argv[fileArgIndex + 1], 'utf-8'));
+console.log(JSON.stringify({ status: 'ok', results: [{ method: 'discord', status: 'ok' }] }));
+`);
+
+  const result = runDigestWithFakeCodex({
+    codexPath: fakeCodex,
+    home,
+    extraEnv: {
+      FOLLOW_BUILDERS_DELIVER_PATH: fakeDeliver,
+      DELIVERED_TEXT_PATH: deliveredText
+    }
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const text = await readFile(deliveredText, 'utf-8');
+  assert.match(text, /Digest for delivery targets/);
 });
