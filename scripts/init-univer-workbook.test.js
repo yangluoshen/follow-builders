@@ -24,13 +24,35 @@ async function pathExists(path) {
   }
 }
 
-async function writeFakeUniver(path, callsPath, syncBody = `echo '{"success":true,"status":{"unitID":"unit-test-1"}}'; exit 0`) {
+async function writeFakeUniver(path, callsPath, options = {}) {
+  const syncBody = options.syncBody || `echo '{"success":true,"status":{"unitID":"unit-test-1","uncommittedMutationCount":0}}'; exit 0`;
+  const runBody = options.runBody || `echo '{"success":true,"sheets":["raw-data","runs","_week-template"]}'; exit 0`;
   await writeExecutable(path, `#!/bin/sh
 printf '%s\\n' "$*" >> "${callsPath}"
-case "$1 $2" in
-  "inspect workbook") echo "# workbook"; exit 0 ;;
-  "sync "*) ${syncBody} ;;
-  *) echo "unexpected $*" >&2; exit 2 ;;
+case "$1" in
+  new)
+    mkdir -p "$2"
+    echo "new" > "$2/.fake-workbook-marker"
+    exit 0
+    ;;
+  run)
+    ${runBody}
+    ;;
+  inspect)
+    echo "# workbook"
+    exit 0
+    ;;
+  commit)
+    echo '{"success":true,"committed":true}'
+    exit 0
+    ;;
+  sync)
+    ${syncBody}
+    ;;
+  *)
+    echo "unexpected $*" >&2
+    exit 2
+    ;;
 esac
 `);
 }
@@ -40,14 +62,14 @@ async function writeFakeWorkbookPackage(path, markerText) {
   await writeFile(join(path, 'data', 'marker.txt'), markerText, 'utf-8');
 }
 
-test('initializes workbook from template and saves public URL', async t => {
+test('initializes workbook from code scaffold and saves public URL', async t => {
   const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
   const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   t.after(() => rm(home, { recursive: true, force: true }));
 
-  await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', 'univer-template-scaffold.js'), '() => ({ success: true })', 'utf-8');
 
   const fakeUniver = join(root, 'fake-univer');
   const calls = join(root, 'calls.log');
@@ -62,12 +84,19 @@ test('initializes workbook from template and saves public URL', async t => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
-  assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'template');
   const config = JSON.parse(await readFile(join(home, '.follow-builders', 'config.json'), 'utf-8'));
+  assert.equal(config.univer.enabled, true);
+  assert.equal(config.univer.workbookPath, workbookPath);
   assert.equal(config.univer.unitId, 'unit-test-1');
   assert.equal(config.univer.publicUrl, 'https://univer.ai/space/sheets/unit-test-1');
   assert.deepEqual((await readFile(calls, 'utf-8')).trim().split('\n'), [
+    `new ${workbookPath} --name Follow Builders`,
+    `run ${workbookPath} --file ${join(root, 'scripts', 'univer-template-scaffold.js')}`,
     `inspect workbook ${workbookPath}`,
+    `inspect range ${workbookPath} --range raw-data!A1:T1`,
+    `inspect range ${workbookPath} --range runs!A1:M1`,
+    `inspect range ${workbookPath} --range _week-template!A1:J7`,
+    `commit ${workbookPath} --message Initialize follow-builders workbook --json`,
     `sync ${workbookPath} --json`
   ]);
 });
@@ -99,9 +128,6 @@ test('rejects option flags without values before using default home', async t =>
   t.after(() => rm(root, { recursive: true, force: true }));
   t.after(() => rm(guardHome, { recursive: true, force: true }));
 
-  await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
-
   const fakeUniver = join(root, 'fake-univer');
   await writeFakeUniver(fakeUniver, join(root, 'calls.log'));
 
@@ -126,14 +152,16 @@ test('restores existing workbook when forced sync fails after overwrite', async 
   t.after(() => rm(root, { recursive: true, force: true }));
   t.after(() => rm(home, { recursive: true, force: true }));
 
-  await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'replacement');
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', 'univer-template-scaffold.js'), '() => ({ success: true })', 'utf-8');
   await mkdir(join(home, '.follow-builders'), { recursive: true });
   const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
   await writeFakeWorkbookPackage(workbookPath, 'original');
 
   const fakeUniver = join(root, 'fake-univer');
-  await writeFakeUniver(fakeUniver, join(root, 'calls.log'), 'echo "sync failed" >&2; exit 9');
+  await writeFakeUniver(fakeUniver, join(root, 'calls.log'), {
+    syncBody: 'echo "sync failed" >&2; exit 9'
+  });
 
   const result = spawnSync(process.execPath, [
     INIT,
@@ -154,14 +182,16 @@ test('rejects unsuccessful sync JSON even when a unit id is present', async t =>
   t.after(() => rm(root, { recursive: true, force: true }));
   t.after(() => rm(home, { recursive: true, force: true }));
 
-  await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', 'univer-template-scaffold.js'), '() => ({ success: true })', 'utf-8');
 
   const fakeUniver = join(root, 'fake-univer');
   await writeFakeUniver(
     fakeUniver,
     join(root, 'calls.log'),
-    `echo '{"success":false,"unitId":"unit-bad","error":"sync rejected"}'; exit 0`
+    {
+      syncBody: `echo '{"success":false,"unitId":"unit-bad","error":"sync rejected"}'; exit 0`
+    }
   );
 
   const result = spawnSync(process.execPath, [
@@ -176,14 +206,14 @@ test('rejects unsuccessful sync JSON even when a unit id is present', async t =>
   assert.equal(await pathExists(join(home, '.follow-builders', 'config.json')), false);
 });
 
-test('uses existing workbook without recopying when force is not set', async t => {
+test('uses existing workbook without running scaffold when force is not set', async t => {
   const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
   const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   t.after(() => rm(home, { recursive: true, force: true }));
 
-  await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', 'univer-template-scaffold.js'), '() => ({ success: true })', 'utf-8');
   await mkdir(join(home, '.follow-builders'), { recursive: true });
   const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
   await writeFakeWorkbookPackage(workbookPath, 'existing');
@@ -205,4 +235,34 @@ test('uses existing workbook without recopying when force is not set', async t =
     `inspect workbook ${workbookPath}`,
     `sync ${workbookPath} --json`
   ]);
+});
+
+test('restores existing workbook when forced scaffold fails after overwrite', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
+  const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', 'univer-template-scaffold.js'), '() => ({ success: false })', 'utf-8');
+  await mkdir(join(home, '.follow-builders'), { recursive: true });
+  const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  await writeFakeWorkbookPackage(workbookPath, 'original');
+
+  const fakeUniver = join(root, 'fake-univer');
+  await writeFakeUniver(fakeUniver, join(root, 'calls.log'), {
+    runBody: `echo '{"success":false,"error":"scaffold rejected"}'; exit 0`
+  });
+
+  const result = spawnSync(process.execPath, [
+    INIT,
+    '--skill-dir', root,
+    '--home', home,
+    '--univer-path', fakeUniver,
+    '--force'
+  ], { encoding: 'utf-8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /scaffold rejected/);
+  assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'original');
 });

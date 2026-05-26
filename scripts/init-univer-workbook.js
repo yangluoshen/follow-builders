@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir, tmpdir } from 'os';
 import { readConfigFile, updateConfigFile, userWorkbookPath } from './lib/follow-builders-config.js';
-import { publicUrlForUnit, WORKBOOK_TEMPLATE_PATH } from './lib/univer-workbook-contract.js';
+import { publicUrlForUnit, WORKBOOK_SCAFFOLD_SCRIPT_PATH } from './lib/univer-workbook-contract.js';
 import { runUniver, runUniverJson } from './lib/univer-command.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -64,13 +64,56 @@ function assertSyncSucceeded(syncResult) {
   }
 }
 
+function parseJsonOutput(stdout, label) {
+  try {
+    return JSON.parse(stdout);
+  } catch (err) {
+    throw new Error(`Could not parse ${label} JSON output: ${err.message}`);
+  }
+}
+
+function assertScaffoldSucceeded(scaffoldResult) {
+  if (scaffoldResult?.success !== true) {
+    throw new Error(`univer scaffold failed: ${scaffoldResult?.error || JSON.stringify(scaffoldResult)}`);
+  }
+}
+
 async function cleanupBackup(backupDir) {
   if (backupDir) await rm(backupDir, { recursive: true, force: true });
+}
+
+async function removePath(path) {
+  await rm(path, { recursive: true, force: true });
 }
 
 async function replacePath(source, destination) {
   await rm(destination, { recursive: true, force: true });
   await cp(source, destination, { recursive: true });
+}
+
+async function backupExistingWorkbook(workbookPath) {
+  const backupDir = await mkdtemp(join(tmpdir(), 'follow-builders-univer-backup-'));
+  const backupPath = join(backupDir, 'follow-builders.univer');
+  await replacePath(workbookPath, backupPath);
+  return { backupDir, backupPath };
+}
+
+async function createScaffoldedWorkbook({ workbookPath, scaffoldPath, univerPath }) {
+  await mkdir(dirname(workbookPath), { recursive: true });
+  await runUniver(['new', workbookPath, '--name', 'Follow Builders'], { univerPath });
+  const scaffoldOutput = await runUniver(['run', workbookPath, '--file', scaffoldPath], { univerPath });
+  assertScaffoldSucceeded(parseJsonOutput(scaffoldOutput.stdout, 'univer run'));
+  await runUniver(['inspect', 'workbook', workbookPath], { univerPath });
+  await runUniver(['inspect', 'range', workbookPath, '--range', 'raw-data!A1:T1'], { univerPath });
+  await runUniver(['inspect', 'range', workbookPath, '--range', 'runs!A1:M1'], { univerPath });
+  await runUniver(['inspect', 'range', workbookPath, '--range', '_week-template!A1:J7'], { univerPath });
+  const commitResult = await runUniverJson(
+    ['commit', workbookPath, '--message', 'Initialize follow-builders workbook'],
+    { univerPath }
+  );
+  if (commitResult.success === false || commitResult.committed === false) {
+    throw new Error(`univer commit failed: ${JSON.stringify(commitResult)}`);
+  }
 }
 
 async function main() {
@@ -87,24 +130,29 @@ async function main() {
     throw new Error('Univer workbook is missing but config already has a Univer unitId. Use an explicit reset or migration flow.');
   }
 
+  const scaffoldPath = join(args.skillDir, WORKBOOK_SCAFFOLD_SCRIPT_PATH);
   let backupDir;
   let backupPath;
   let shouldRestoreBackup = false;
   if (hasWorkbook && args.force) {
-    backupDir = await mkdtemp(join(tmpdir(), 'follow-builders-univer-backup-'));
-    backupPath = join(backupDir, 'follow-builders.univer');
-    await replacePath(workbookPath, backupPath);
+    const backup = await backupExistingWorkbook(workbookPath);
+    backupDir = backup.backupDir;
+    backupPath = backup.backupPath;
   }
 
   try {
     if (!hasWorkbook || args.force) {
-      const templatePath = join(args.skillDir, WORKBOOK_TEMPLATE_PATH);
-      await mkdir(dirname(workbookPath), { recursive: true });
       shouldRestoreBackup = Boolean(backupPath);
-      await replacePath(templatePath, workbookPath);
+      await removePath(workbookPath);
+      await createScaffoldedWorkbook({
+        workbookPath,
+        scaffoldPath,
+        univerPath: args.univerPath
+      });
+    } else {
+      await runUniver(['inspect', 'workbook', workbookPath], { univerPath: args.univerPath });
     }
 
-    await runUniver(['inspect', 'workbook', workbookPath], { univerPath: args.univerPath });
     const syncResult = await runUniverJson(['sync', workbookPath], { univerPath: args.univerPath });
     assertSyncSucceeded(syncResult);
     const unitId = extractUnitId(syncResult);
@@ -133,6 +181,8 @@ async function main() {
       } catch (restoreErr) {
         err.message = `${err.message}; additionally failed to restore workbook backup: ${restoreErr.message}`;
       }
+    } else if (!hasWorkbook) {
+      await removePath(workbookPath);
     }
     await cleanupBackup(backupDir);
     throw err;
