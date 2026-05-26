@@ -27,6 +27,7 @@ async function pathExists(path) {
 async function writeFakeUniver(path, callsPath, options = {}) {
   const syncBody = options.syncBody || `echo '{"success":true,"status":{"unitID":"unit-test-1","uncommittedMutationCount":0}}'; exit 0`;
   const runBody = options.runBody || `echo '{"success":true,"sheets":["raw-data","runs","_week-template"]}'; exit 0`;
+  const commitBody = options.commitBody || `echo '{"success":true,"committed":true}'; exit 0`;
   await writeExecutable(path, `#!/bin/sh
 printf '%s\\n' "$*" >> "${callsPath}"
 case "$1" in
@@ -43,8 +44,7 @@ case "$1" in
     exit 0
     ;;
   commit)
-    echo '{"success":true,"committed":true}'
-    exit 0
+    ${commitBody}
     ;;
   sync)
     ${syncBody}
@@ -176,6 +176,36 @@ test('restores existing workbook when forced sync fails after overwrite', async 
   assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'original');
 });
 
+test('restores existing workbook when forced commit returns unsuccessful JSON', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
+  const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', 'univer-template-scaffold.js'), '() => ({ success: true })', 'utf-8');
+  await mkdir(join(home, '.follow-builders'), { recursive: true });
+  const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  await writeFakeWorkbookPackage(workbookPath, 'original');
+
+  const fakeUniver = join(root, 'fake-univer');
+  await writeFakeUniver(fakeUniver, join(root, 'calls.log'), {
+    commitBody: `echo '{"success":false,"committed":false,"error":"commit rejected"}'; exit 0`
+  });
+
+  const result = spawnSync(process.execPath, [
+    INIT,
+    '--skill-dir', root,
+    '--home', home,
+    '--univer-path', fakeUniver,
+    '--force'
+  ], { encoding: 'utf-8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /commit rejected/);
+  assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'original');
+});
+
 test('rejects unsuccessful sync JSON even when a unit id is present', async t => {
   const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
   const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
@@ -264,5 +294,35 @@ test('restores existing workbook when forced scaffold fails after overwrite', as
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr + result.stdout, /scaffold rejected/);
+  assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'original');
+});
+
+test('restores existing workbook when forced scaffold outputs malformed JSON', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
+  const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  await mkdir(join(root, 'scripts'), { recursive: true });
+  await writeFile(join(root, 'scripts', 'univer-template-scaffold.js'), '() => ({ success: true })', 'utf-8');
+  await mkdir(join(home, '.follow-builders'), { recursive: true });
+  const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  await writeFakeWorkbookPackage(workbookPath, 'original');
+
+  const fakeUniver = join(root, 'fake-univer');
+  await writeFakeUniver(fakeUniver, join(root, 'calls.log'), {
+    runBody: 'echo "not-json"; exit 0'
+  });
+
+  const result = spawnSync(process.execPath, [
+    INIT,
+    '--skill-dir', root,
+    '--home', home,
+    '--univer-path', fakeUniver,
+    '--force'
+  ], { encoding: 'utf-8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /Could not parse univer run JSON output/);
   assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'original');
 });
