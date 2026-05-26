@@ -410,8 +410,26 @@ test('configured target with missing method returns error instead of default std
   assert.equal(summary.status, 'error');
   assert.equal(summary.results.length, 1);
   assert.equal(summary.results[0].status, 'error');
-  assert.equal(summary.results[0].method, 'stdout');
+  assert.equal(summary.results[0].method, 'unknown');
   assert.match(summary.results[0].message, /Unsupported delivery method: missing method/);
+});
+
+test('null configured target returns JSON error instead of crashing', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  await writeConfig(home, { delivery: { targets: [null] } });
+
+  const result = await runDeliver({ home, message: 'Null delivery target' });
+
+  assert.equal(result.status, 1);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'error');
+  assert.deepEqual(summary.results, [{
+    status: 'error',
+    method: 'unknown',
+    message: 'Unsupported delivery target: expected object'
+  }]);
 });
 
 test('stdout default still prints only the digest text', async t => {

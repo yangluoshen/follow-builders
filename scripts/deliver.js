@@ -71,6 +71,13 @@ function normalizeDeliveryTargets(delivery) {
   return [{ method: 'stdout' }];
 }
 
+function targetMethodLabel(target) {
+  if (target && typeof target === 'object' && target.method) {
+    return target.method;
+  }
+  return 'unknown';
+}
+
 async function readErrorBody(res) {
   const text = await res.text();
   if (!text) return {};
@@ -212,6 +219,10 @@ async function sendEmail(text, apiKey, toEmail) {
 async function sendTarget(target, digestText, options = {}) {
   const { printStdout = true } = options;
 
+  if (!target || typeof target !== 'object') {
+    throw new Error('Unsupported delivery target: expected object');
+  }
+
   switch (target.method) {
     case 'discord': {
       const webhookUrl = target.webhookUrl || process.env.DISCORD_WEBHOOK_URL;
@@ -286,7 +297,10 @@ async function main() {
     return;
   }
 
-  const isSingleStdout = targets.length === 1 && targets[0].method === 'stdout';
+  const isSingleStdout = targets.length === 1
+    && targets[0]
+    && typeof targets[0] === 'object'
+    && targets[0].method === 'stdout';
   if (isSingleStdout) {
     console.log(digestText);
     return;
@@ -299,7 +313,7 @@ async function main() {
     } catch (err) {
       results.push({
         status: 'error',
-        method: target.method || 'stdout',
+        method: targetMethodLabel(target),
         message: err.message
       });
     }
