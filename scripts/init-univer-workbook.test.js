@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 
 const SCRIPT_DIR = fileURLToPath(new URL('.', import.meta.url));
 const INIT = join(SCRIPT_DIR, 'init-univer-workbook.js');
+const SCAFFOLD = join(SCRIPT_DIR, 'univer-template-scaffold.js');
 
 async function writeExecutable(path, text) {
   await writeFile(path, text, 'utf-8');
@@ -62,6 +63,169 @@ async function writeFakeWorkbookPackage(path, markerText) {
   await writeFile(join(path, 'data', 'marker.txt'), markerText, 'utf-8');
 }
 
+function parseA1Range(a1) {
+  const match = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/.exec(a1);
+  if (!match) throw new Error(`Unsupported A1 range: ${a1}`);
+  const columnIndex = letters => letters.split('').reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0) - 1;
+  const startColumn = columnIndex(match[1]);
+  const startRow = Number(match[2]) - 1;
+  const endColumn = match[3] ? columnIndex(match[3]) : startColumn;
+  const endRow = match[4] ? Number(match[4]) - 1 : startRow;
+  return {
+    row: startRow,
+    column: startColumn,
+    rowCount: endRow - startRow + 1,
+    columnCount: endColumn - startColumn + 1
+  };
+}
+
+class ScaffoldFakeRange {
+  constructor(sheet, row, column, rowCount, columnCount) {
+    Object.assign(this, { sheet, row, column, rowCount, columnCount });
+  }
+
+  clear() { return this; }
+  clearContent() { return this; }
+  merge() { return this; }
+  setValue() { return this; }
+  setValues() { return this; }
+  setFontWeight() { return this; }
+  setFontColor() { return this; }
+  setFontSize() { return this; }
+  setBackgroundColor() { return this; }
+  setVerticalAlignment() { return this; }
+  setHorizontalAlignment() { return this; }
+  setWrap() { return this; }
+  setBorder() { return this; }
+  getValue() { return ''; }
+  getRange() { return this; }
+}
+
+class ScaffoldFakeSheet {
+  constructor(name, rows, columns, options = {}) {
+    Object.assign(this, {
+      name,
+      rows,
+      columns,
+      options,
+      conditionalFormattingRules: [],
+      sheetId: `sheet-${name}`
+    });
+    if (options.noConditionalFormattingRuleGetter) {
+      this.getConditionalFormattingRules = undefined;
+    }
+  }
+
+  getSheetName() { return this.name; }
+  getSheetId() { return this.sheetId; }
+  getLastRow() { return 0; }
+  getLastColumn() { return 0; }
+  getMaxRows() { return this.rows; }
+  getMaxColumns() { return this.columns; }
+  setRowCount(value) { this.rows = value; return this; }
+  setColumnCount(value) { this.columns = value; return this; }
+  insertRowsAfter(_index, count) { this.rows += count; return this; }
+  insertColumnsAfter(_index, count) { this.columns += count; return this; }
+  setHiddenGridlines() { return this; }
+  setFrozenRows() { return this; }
+  setFrozenColumns() { return this; }
+  setRowHeight() { return this; }
+  setRowHeights() { return this; }
+  setColumnWidth() { return this; }
+  setColumnWidths() { return this; }
+  hideColumns() { return this; }
+  clearConditionalFormatRules() { this.conditionalFormattingRules = []; return this; }
+  addConditionalFormattingRule(rule) { this.conditionalFormattingRules.push(rule); return this; }
+  getConditionalFormattingRules() { return this.conditionalFormattingRules; }
+  newConditionalFormattingRule() {
+    if (this.options.partialConditionalFormattingBuilder) {
+      return { build: () => ({ partial: true }) };
+    }
+    return undefined;
+  }
+
+  getRange(rowOrA1, column, rowCount = 1, columnCount = 1) {
+    const range = typeof rowOrA1 === 'string'
+      ? parseA1Range(rowOrA1)
+      : { row: rowOrA1, column, rowCount, columnCount };
+    if (range.row < 0 || range.column < 0 || range.row + range.rowCount > this.rows || range.column + range.columnCount > this.columns) {
+      throw new Error(`${this.name} range out of bounds: ${JSON.stringify(range)} for ${this.rows}x${this.columns}`);
+    }
+    return new ScaffoldFakeRange(this, range.row, range.column, range.rowCount, range.columnCount);
+  }
+}
+
+class ScaffoldFakeWorkbook {
+  constructor(sheets = []) {
+    this.sheets = sheets;
+  }
+
+  getSheetByName(name) {
+    return this.sheets.find(sheet => sheet.name === name);
+  }
+
+  create(name, rows, columns) {
+    const sheet = new ScaffoldFakeSheet(name, rows, columns);
+    this.sheets.push(sheet);
+    return sheet;
+  }
+
+  getSheets() { return this.sheets; }
+  deleteSheet(sheetId) {
+    this.sheets = this.sheets.filter(sheet => sheet.sheetId !== sheetId);
+  }
+}
+
+async function runScaffoldWithWorkbook(workbook, enumOverrides = {}) {
+  const scaffoldSource = await readFile(SCAFFOLD, 'utf-8');
+  const scaffold = Function(`return ${scaffoldSource}`)();
+  const previousUniverAPI = globalThis.univerAPI;
+  globalThis.univerAPI = {
+    Enum: {
+      BorderType: { OUTSIDE: 'outside' },
+      BorderStyleTypes: { THIN: 'thin' },
+      ...enumOverrides
+    },
+    getActiveWorkbook: () => workbook
+  };
+  try {
+    return scaffold();
+  } finally {
+    globalThis.univerAPI = previousUniverAPI;
+  }
+}
+
+test('scaffold grows an existing narrow week template before writing helper columns', async () => {
+  const weekSheet = new ScaffoldFakeSheet('_week-template', 240, 10);
+  const workbook = new ScaffoldFakeWorkbook([
+    new ScaffoldFakeSheet('raw-data', 1000, 20),
+    new ScaffoldFakeSheet('runs', 500, 13),
+    weekSheet
+  ]);
+
+  const result = await runScaffoldWithWorkbook(workbook);
+
+  assert.equal(result.success, true, result.error);
+  assert.equal(weekSheet.columns, 15);
+});
+
+test('scaffold skips conditional formatting when partial CF APIs are unavailable', async () => {
+  const weekSheet = new ScaffoldFakeSheet('_week-template', 240, 15, {
+    partialConditionalFormattingBuilder: true,
+    noConditionalFormattingRuleGetter: true
+  });
+  const workbook = new ScaffoldFakeWorkbook([
+    new ScaffoldFakeSheet('raw-data', 1000, 20),
+    new ScaffoldFakeSheet('runs', 500, 13),
+    weekSheet
+  ]);
+
+  const result = await runScaffoldWithWorkbook(workbook, { ConditionFormatValueTypeEnum: undefined });
+
+  assert.equal(result.success, true, result.error);
+  assert.equal(result.weekConditionalFormattingRules, 0);
+});
+
 test('initializes workbook from code scaffold and saves public URL', async t => {
   const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
   const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
@@ -95,7 +259,7 @@ test('initializes workbook from code scaffold and saves public URL', async t => 
     `inspect workbook ${workbookPath}`,
     `inspect range ${workbookPath} --range raw-data!A1:T1`,
     `inspect range ${workbookPath} --range runs!A1:M1`,
-    `inspect range ${workbookPath} --range _week-template!A1:J7`,
+    `inspect range ${workbookPath} --range _week-template!A1:J12`,
     `commit ${workbookPath} --message Initialize follow-builders workbook --json`,
     `sync ${workbookPath} --json`
   ]);
