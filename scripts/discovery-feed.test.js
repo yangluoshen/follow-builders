@@ -230,6 +230,71 @@ test('fetchDiscoveryContent merges sources, dedupes state, and records non-fatal
   assert.equal(discoveryStateKey(items[0]).startsWith('discovery:'), true);
 });
 
+test('fetchDiscoveryContent inspects HN top stories and keeps AI-related items', async () => {
+  const responses = new Map([
+    ['https://hacker-news.firebaseio.com/v0/topstories.json', {
+      ok: true,
+      json: async () => [101, 102, 103]
+    }],
+    ['https://hacker-news.firebaseio.com/v0/item/101.json', {
+      ok: true,
+      json: async () => ({
+        id: 101,
+        title: 'SQLite query planner notes',
+        url: 'https://example.com/sqlite',
+        by: 'dbuser',
+        time: 1780000000,
+        score: 200,
+        descendants: 30
+      })
+    }],
+    ['https://hacker-news.firebaseio.com/v0/item/102.json', {
+      ok: true,
+      json: async () => ({
+        id: 102,
+        title: 'Show HN: Production monitor for AI agents',
+        url: 'https://example.com/agent-monitor',
+        by: 'builder',
+        time: 1780000001,
+        score: 180,
+        descendants: 22
+      })
+    }],
+    ['https://hacker-news.firebaseio.com/v0/item/103.json', {
+      ok: true,
+      json: async () => ({
+        id: 103,
+        title: 'LLM inference debugging in real workloads',
+        url: 'https://example.com/llm-debug',
+        by: 'mlops',
+        time: 1780000002,
+        score: 90,
+        descendants: 11
+      })
+    }]
+  ]);
+  const fetchImpl = async url => responses.get(url);
+  const state = { seenDiscovery: {} };
+  const errors = [];
+
+  const items = await fetchDiscoveryContent([
+    {
+      name: 'HN Top Stories',
+      kind: 'hn',
+      type: 'hn_top',
+      url: 'https://hacker-news.firebaseio.com/v0/topstories.json',
+      maxItems: 3,
+      inspectItems: 3
+    }
+  ], state, errors, { fetchImpl, now: new Date('2026-05-29T00:00:00Z') });
+
+  assert.equal(items.length, 2);
+  assert.equal(items[0].title, 'Show HN: Production monitor for AI agents');
+  assert.equal(items[0].metadata.rank, 2);
+  assert.equal(items[1].title, 'LLM inference debugging in real workloads');
+  assert.deepEqual(errors, []);
+});
+
 test('fetchDiscoveryContent marks only returned globally capped items as seen', async () => {
   const hits = Array.from({ length: 24 }, (_, index) => ({
     objectID: String(index + 1),

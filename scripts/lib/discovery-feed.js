@@ -340,6 +340,26 @@ export async function fetchDiscoveryContent(sources, state, errors, {
         if (!res?.ok) throw new Error(`HTTP ${res?.status || 'unknown'}`);
         const json = await res.json();
         candidates = (json.hits || []).map((hit) => normalizeHnAlgoliaHit(hit, { sourceName: source.name }));
+      } else if (source.type === 'hn_top') {
+        const res = await fetchImpl(source.url, {
+          headers: { 'User-Agent': 'FollowBuilders/1.0' },
+          signal: timeoutSignal(30000)
+        });
+        if (!res?.ok) throw new Error(`HTTP ${res?.status || 'unknown'}`);
+        const ids = await res.json();
+        const itemIds = Array.isArray(ids) ? ids.slice(0, source.inspectItems || 30) : [];
+        const itemBaseUrl = source.itemBaseUrl || 'https://hacker-news.firebaseio.com/v0/item';
+        const items = [];
+        for (let index = 0; index < itemIds.length; index += 1) {
+          const itemRes = await fetchImpl(`${itemBaseUrl}/${itemIds[index]}.json`, {
+            headers: { 'User-Agent': 'FollowBuilders/1.0' },
+            signal: timeoutSignal(15000)
+          });
+          if (!itemRes?.ok) continue;
+          const item = await itemRes.json();
+          if (item) items.push(normalizeHnItem(item, { sourceName: source.name, rank: index + 1 }));
+        }
+        candidates = items;
       } else if (source.type === 'github_trending') {
         const res = await fetchImpl(source.url, {
           headers: { 'User-Agent': 'FollowBuilders/1.0' },

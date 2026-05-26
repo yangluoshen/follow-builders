@@ -4,18 +4,19 @@
 // Follow Builders — Central Feed Generator
 // ============================================================================
 // Runs on GitHub Actions (daily at 6am UTC) to fetch content and publish
-// feed-x.json, feed-podcasts.json, and feed-blogs.json.
+// feed-x.json, feed-podcasts.json, feed-blogs.json, and feed-discovery.json.
 //
 // Deduplication: tracks previously seen tweet IDs, episode GUIDs, and article
 // URLs in state-feed.json so content is never repeated across runs.
 //
-// Usage: node generate-feed.js [--tweets-only | --podcasts-only | --blogs-only]
+// Usage: node generate-feed.js [--tweets-only | --podcasts-only | --blogs-only | --discovery-only]
 // Env vars needed: X_BEARER_TOKEN, POD2TXT_API_KEY
 // ============================================================================
 
 import { readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
+import { fetchDiscoveryContent } from "./lib/discovery-feed.js";
 
 // -- Constants ---------------------------------------------------------------
 
@@ -42,15 +43,26 @@ const STATE_PATH = join(SCRIPT_DIR, "..", "state-feed.json");
 
 async function loadState() {
   if (!existsSync(STATE_PATH)) {
-    return { seenTweets: {}, seenVideos: {}, seenArticles: {} };
+    return {
+      seenTweets: {},
+      seenVideos: {},
+      seenArticles: {},
+      seenDiscovery: {},
+    };
   }
   try {
     const state = JSON.parse(await readFile(STATE_PATH, "utf-8"));
     // Ensure seenArticles exists for older state files
     if (!state.seenArticles) state.seenArticles = {};
+    if (!state.seenDiscovery) state.seenDiscovery = {};
     return state;
   } catch {
-    return { seenTweets: {}, seenVideos: {}, seenArticles: {} };
+    return {
+      seenTweets: {},
+      seenVideos: {},
+      seenArticles: {},
+      seenDiscovery: {},
+    };
   }
 }
 
@@ -65,6 +77,10 @@ async function saveState(state) {
   }
   for (const [id, ts] of Object.entries(state.seenArticles || {})) {
     if (ts < cutoff) delete state.seenArticles[id];
+  }
+  const discoveryCutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  for (const [id, ts] of Object.entries(state.seenDiscovery || {})) {
+    if (ts < discoveryCutoff) delete state.seenDiscovery[id];
   }
   await writeFile(STATE_PATH, JSON.stringify(state, null, 2));
 }
@@ -980,12 +996,15 @@ async function main() {
   const tweetsOnly = args.includes("--tweets-only");
   const podcastsOnly = args.includes("--podcasts-only");
   const blogsOnly = args.includes("--blogs-only");
+  const discoveryOnly = args.includes("--discovery-only");
 
   // If a specific --*-only flag is set, only that feed type runs.
-  // If no flag is set, all three run.
-  const runTweets = tweetsOnly || (!podcastsOnly && !blogsOnly);
-  const runPodcasts = podcastsOnly || (!tweetsOnly && !blogsOnly);
-  const runBlogs = blogsOnly || (!tweetsOnly && !podcastsOnly);
+  // If no flag is set, all feed types run.
+  const anyOnly = tweetsOnly || podcastsOnly || blogsOnly || discoveryOnly;
+  const runTweets = tweetsOnly || !anyOnly;
+  const runPodcasts = podcastsOnly || !anyOnly;
+  const runBlogs = blogsOnly || !anyOnly;
+  const runDiscovery = discoveryOnly || !anyOnly;
 
   const xBearerToken = process.env.X_BEARER_TOKEN;
   const pod2txtKey = process.env.POD2TXT_API_KEY;
@@ -1083,6 +1102,35 @@ async function main() {
       JSON.stringify(blogFeed, null, 2),
     );
     console.error(`  feed-blogs.json: ${blogContent.length} posts`);
+  }
+
+  // Fetch discovery candidates
+  if (
+    runDiscovery &&
+    sources.discovery_sources &&
+    sources.discovery_sources.length > 0
+  ) {
+    console.error("Fetching discovery content...");
+    const discovery = await fetchDiscoveryContent(
+      sources.discovery_sources,
+      state,
+      errors,
+    );
+    console.error(`  Found ${discovery.length} discovery candidate(s)`);
+
+    const discoveryErrors = errors.filter((e) => e.startsWith("Discovery"));
+    const discoveryFeed = {
+      generatedAt: new Date().toISOString(),
+      lookbackHours: 72,
+      discovery,
+      stats: { discoveryItems: discovery.length },
+      errors: discoveryErrors.length > 0 ? discoveryErrors : undefined,
+    };
+    await writeFile(
+      join(SCRIPT_DIR, "..", "feed-discovery.json"),
+      JSON.stringify(discoveryFeed, null, 2),
+    );
+    console.error(`  feed-discovery.json: ${discovery.length} candidates`);
   }
 
   // Save dedup state
