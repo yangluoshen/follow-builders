@@ -14,7 +14,7 @@ Philosophy: follow builders with original opinions, not influencers who regurgit
 **No API keys or environment variables are required from users.** All source
 content (X/Twitter posts, YouTube transcripts, official blogs, and discovery
 candidates) is fetched centrally and served via public feeds. Users only need
-API keys if they choose Telegram or email delivery.
+delivery credentials if they choose Telegram, Discord, or email delivery.
 
 ## Detecting Platform
 
@@ -28,9 +28,11 @@ which openclaw 2>/dev/null && echo "PLATFORM=openclaw" || echo "PLATFORM=other"
   Cron uses `openclaw cron add`.
 
 - **Other** (Claude Code, Cursor, etc.): Non-persistent agent. Terminal closes = agent stops.
-  For automatic delivery, users MUST set up Telegram or Email. Without it, digests
-  are on-demand only (user types `/ai` to get one).
-  Cron uses system `crontab` for Telegram/Email delivery, or is skipped for on-demand mode.
+  For automatic delivery, users MUST set up at least one configured delivery target:
+  Telegram, Discord, or email. Without a configured target, digests are on-demand
+  only (user types `/ai` to get one).
+  Cron uses system `crontab` for configured delivery targets, or is skipped for
+  on-demand mode.
 
 Save the detected platform in config.json as `"platform": "openclaw"` or `"platform": "other"`.
 
@@ -68,21 +70,24 @@ For weekly, also ask which day.
 ### Step 3: Delivery Method
 
 **If OpenClaw:** SKIP this step entirely. OpenClaw already delivers messages to the
-user's Telegram/Discord/WhatsApp/etc. Set `delivery.method` to `"stdout"` in config
-and move on.
+user's Telegram/Discord/WhatsApp/etc. Set `delivery.targets` to a single stdout
+target in config and move on. For OpenClaw stdout setup, legacy
+`delivery.method: "stdout"` is also acceptable.
 
 **If non-persistent agent (Claude Code, Cursor, etc.):**
 
 Tell the user:
 
 "Since you're not using a persistent agent, I need a way to send you the digest
-when you're not in this terminal. You have two options:
+when you're not in this terminal. You can choose one or more automatic delivery
+channels, or choose on-demand only:
 
 1. **Telegram** — I'll send it as a Telegram message (free, takes ~5 min to set up)
-2. **Email** — I'll email it to you (requires a free Resend account)
+2. **Discord** — I'll post it to a Discord channel using an Incoming Webhook
+3. **Email** — I'll email it to you (requires a free Resend account)
 
-Or you can skip this and just type /ai whenever you want your digest — but it
-won't arrive automatically."
+Or choose **on-demand only**: no automatic delivery; type /ai whenever you want
+a digest."
 
 **If they choose Telegram:**
 Guide the user step by step:
@@ -94,12 +99,38 @@ Guide the user step by step:
 6. Now open a chat with your new bot (search its username) and send it any message (e.g. "hi")
 7. This is important — you MUST send a message to the bot first, otherwise delivery won't work
 
-Then add the token to the .env file. To get the chat ID, run:
+After the user provides the token, get the chat ID:
 ```bash
 curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['result'][0]['message']['chat']['id'])" 2>/dev/null || echo "No messages found — make sure you sent a message to your bot first"
 ```
 
-Save the chat ID in config.json under `delivery.chatId`.
+The agent must add or replace `TELEGRAM_BOT_TOKEN` in
+`~/.follow-builders/.env`, then save the chat ID in config.json as a Telegram
+delivery target. Do not ask the user to manually edit `.env` or config.json.
+
+**If they choose Discord:**
+Explain: "Discord delivery uses an Incoming Webhook attached to the target text
+channel. You do not need to create a Discord App or Bot."
+
+Guide the user step by step:
+1. Open the Discord server where the digest should be posted
+2. Select the target text channel
+3. Open channel settings with the gear icon
+4. Open **Integrations** / **集成**
+5. Open **Webhooks**
+6. Click **New Webhook** / **新建 Webhook**
+7. Give it a clear name, such as "AI Builders Digest"
+8. Confirm the webhook points to the correct channel
+9. Click **Copy Webhook URL**
+10. Paste the webhook URL back into this chat
+
+Validate that the webhook URL starts with either:
+- `https://discord.com/api/webhooks/`
+- `https://discordapp.com/api/webhooks/`
+
+If validation fails, ask the user to copy the webhook URL again. The agent must
+add or replace `DISCORD_WEBHOOK_URL` in `~/.follow-builders/.env`. Do not write
+the Discord webhook URL into config.json.
 
 **If they choose Email:**
 Ask for their email address.
@@ -109,11 +140,13 @@ Then they need a Resend API key:
 3. Go to API Keys in the dashboard
 4. Create a new key and copy it
 
-Add the key to the .env file.
+The agent must add or replace `RESEND_API_KEY` in `~/.follow-builders/.env`,
+then save the email address in config.json as an email delivery target. Do not
+ask the user to manually edit `.env` or config.json.
 
 **If they choose on-demand:**
-Set `delivery.method` to `"stdout"`. Tell them: "No problem — just type /ai
-whenever you want your digest. No automatic delivery will be set up."
+Set `delivery.targets` to a single stdout target. Tell them: "No problem — just
+type /ai whenever you want your digest. No automatic delivery will be set up."
 
 ### Step 4: Language
 
@@ -122,30 +155,56 @@ Ask: "What language do you prefer for your digest?"
 - Chinese (translated from English sources)
 - Bilingual (both English and Chinese, side by side)
 
-### Step 5: API Keys
+### Step 5: API Keys and Delivery Credentials
 
-**If the user chose "stdout" or "right here" delivery:** No API keys needed at all!
-All content is fetched centrally. Skip to Step 6.
+**If the user chose only "stdout", "right here", or on-demand delivery:** No API
+keys or delivery credentials are needed at all! All content is fetched centrally.
+Skip to Step 6.
 
-**If the user chose Telegram or Email delivery:**
-Create the .env file with only the delivery key they need:
+**If the user chose Telegram, Discord, or email delivery:**
+Create or touch the `.env` file, then add only the credentials for the selected
+delivery channels. The agent writes or updates the values after collecting them
+from the user; do not ask the user to manually edit `.env`.
 
 ```bash
 mkdir -p ~/.follow-builders
-cat > ~/.follow-builders/.env << 'ENVEOF'
-# Telegram bot token (only if using Telegram delivery)
-# TELEGRAM_BOT_TOKEN=paste_your_token_here
-
-# Resend API key (only if using email delivery)
-# RESEND_API_KEY=paste_your_key_here
-ENVEOF
+touch ~/.follow-builders/.env
 ```
 
-Uncomment only the line they need. Open the file for them to paste the key.
+Supported delivery credentials:
+- Telegram: `TELEGRAM_BOT_TOKEN`
+- Discord: `DISCORD_WEBHOOK_URL`
+- Email: `RESEND_API_KEY`
+
+When writing credentials, preserve unrelated existing `.env` lines and replace
+only the selected keys. For example, after validating/collecting the values:
+
+```bash
+mkdir -p ~/.follow-builders
+touch ~/.follow-builders/.env
+KEY="DISCORD_WEBHOOK_URL" VALUE="<validated webhook URL>" node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const envPath = `${process.env.HOME}/.follow-builders/.env`;
+const key = process.env.KEY;
+const value = process.env.VALUE;
+const lines = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8').split(/\r?\n/) : [];
+let found = false;
+const next = lines.map((line) => {
+  if (line.startsWith(`${key}=`)) {
+    found = true;
+    return `${key}=${value}`;
+  }
+  return line;
+}).filter((line, index, array) => line !== '' || index < array.length - 1);
+if (!found) next.push(`${key}=${value}`);
+fs.writeFileSync(envPath, `${next.join('\n')}\n`, { mode: 0o600 });
+NODE
+```
 
 Tell the user: "All podcast, X/Twitter, blog, and discovery content is fetched
 for you automatically from central feeds — no API keys needed for that. You only
-need a key for [Telegram/email] delivery."
+need delivery credentials for the channels you selected."
 
 ### Step 6: Show Sources
 
@@ -167,9 +226,12 @@ No need to edit any files — just tell me what you want."
 
 ### Step 8: Set Up Cron
 
-Save the config (include all fields — fill in the user's choices):
-```bash
-cat > ~/.follow-builders/config.json << 'CFGEOF'
+Save the config (include all fields — fill in the user's choices). Build
+`delivery.targets` from only the selected target objects. Do not copy all
+possible targets into one user's config.
+
+Skeleton:
+```jsonc
 {
   "platform": "<openclaw or other>",
   "language": "<en, zh, or bilingual>",
@@ -178,9 +240,9 @@ cat > ~/.follow-builders/config.json << 'CFGEOF'
   "deliveryTime": "<HH:MM>",
   "weeklyDay": "<day of week, only if weekly>",
   "delivery": {
-    "method": "<stdout, telegram, or email>",
-    "chatId": "<telegram chat ID, only if telegram>",
-    "email": "<email address, only if email>"
+    "targets": [
+      <selected target objects only>
+    ]
   },
   "cron": {
     "mode": "<llm or raw>",
@@ -196,8 +258,59 @@ cat > ~/.follow-builders/config.json << 'CFGEOF'
   },
   "onboardingComplete": true
 }
-CFGEOF
 ```
+
+Concrete `delivery` examples:
+
+On-demand/stdout only:
+```json
+{
+  "delivery": {
+    "targets": [
+      { "method": "stdout" }
+    ]
+  }
+}
+```
+
+Discord:
+```json
+{
+  "delivery": {
+    "targets": [
+      { "method": "discord" }
+    ]
+  }
+}
+```
+
+Telegram and Discord:
+```json
+{
+  "delivery": {
+    "targets": [
+      { "method": "telegram", "chatId": "<telegram chat ID>" },
+      { "method": "discord" }
+    ]
+  }
+}
+```
+
+Email:
+```json
+{
+  "delivery": {
+    "targets": [
+      { "method": "email", "email": "<email address>" }
+    ]
+  }
+}
+```
+
+Do not store secrets in config.json: Telegram bot tokens, Discord webhook URLs,
+and Resend API keys belong only in `~/.follow-builders/.env`. Legacy
+`delivery.method` is still accepted by the scripts for compatibility, but new
+setup must write `delivery.targets` with `method` on each target object.
 
 The empty `univer.unitId` and `univer.publicUrl` values are pre-init
 placeholders. Workbook history is not active until initialization succeeds.
@@ -216,7 +329,7 @@ If the `univer` CLI, login, or sync is unavailable, set `univer.enabled` to
 `false` for now and continue Markdown setup. Tell the user workbook history is
 inactive until they install/login to `univer` and rerun the init command.
 
-Then set up the scheduled job based on platform AND delivery method:
+Then set up the scheduled job based on platform and configured delivery targets:
 
 **OpenClaw:**
 
@@ -292,7 +405,7 @@ Common errors and fixes:
 
 Do NOT proceed to the welcome digest step until the cron delivery has been verified.
 
-**Non-persistent agent + Telegram or Email delivery:**
+**Non-persistent agent + configured delivery targets:**
 Use system crontab so it runs even when the terminal is closed. Prefer the LLM
 cron runner so the scheduled digest is remixed before delivery:
 ```bash
@@ -322,20 +435,20 @@ SKILL_DIR="<absolute path to the skill directory>"
 ```
 Warn them that raw cron may deliver structured JSON instead of a readable digest.
 
-**Non-persistent agent + on-demand only (no Telegram/Email):**
+**Non-persistent agent + on-demand only (stdout target only):**
 Skip cron setup entirely. Tell the user: "Since you chose on-demand delivery,
 there's no scheduled job. Just type /ai whenever you want your digest."
 
 ### Step 9: Welcome Digest
 
-**DO NOT skip this step.** Immediately after setting up the cron job, generate
-and send the user their first digest so they can see what it looks like.
+**DO NOT skip this step.** Immediately after finishing setup, generate and send
+the user their first digest so they can see what it looks like.
 
 Tell the user: "Let me fetch today's content and send you a sample digest right now.
 This takes about a minute."
 
-Then run the full Content Delivery workflow below right now, without
-waiting for the cron job.
+Then run the full Content Delivery workflow below right now, without waiting for
+the next scheduled run.
 
 After delivering the digest, ask for feedback:
 
@@ -345,7 +458,7 @@ After delivering the digest, ask for feedback:
 Just tell me and I'll adjust."
 
 Then add the appropriate closing line based on their setup:
-- **OpenClaw or Telegram/Email delivery:** "Your next digest will arrive
+- **OpenClaw or configured delivery targets:** "Your next digest will arrive
   automatically at [their chosen time]."
 - **On-demand only:** "Type /ai anytime you want your next digest."
 
@@ -551,15 +664,17 @@ the remote workbook may not include the latest data.
 
 ### Step 7: Deliver
 
-Read `config.delivery.method` from the JSON:
+Read delivery targets from the JSON. Prefer `config.delivery.targets` when it is
+present. If `delivery.targets` is missing, fall back to legacy
+`config.delivery.method` compatibility.
 
-**If "telegram" or "email":**
+**If any configured target has a non-stdout `method` (`telegram`, `discord`, or `email`):**
 ```bash
 cd ${CLAUDE_SKILL_DIR}/scripts && node deliver.js --file /tmp/fb-digest.txt 2>/dev/null
 ```
 If delivery fails, show the digest in the terminal as fallback.
 
-**If "stdout" (default):**
+**If only stdout is configured, or no delivery config exists:**
 Output the contents of `/tmp/fb-digest.txt` directly.
 
 ---
@@ -583,9 +698,13 @@ open an issue at https://github.com/zarazhangrui/follow-builders."
 - "Switch to Chinese/English/bilingual" → Update `language` in config.json
 
 ### Delivery Changes
-- "Switch to Telegram/email" → Update `delivery.method` in config.json, guide user through setup if needed
-- "Change my email" → Update `delivery.email` in config.json
-- "Send to this chat instead" → Set `delivery.method` to "stdout"
+- "Switch to Telegram" → Configure Telegram credentials if needed, then set `delivery.targets` to `[ { "method": "telegram", "chatId": "<telegram chat ID>" } ]`
+- "Switch to Discord" → Guide the user through Discord Incoming Webhook setup, validate the webhook URL, write/update `DISCORD_WEBHOOK_URL` in `~/.follow-builders/.env`, then set `delivery.targets` to `[ { "method": "discord" } ]`
+- "Switch to email" → Configure the Resend credential if needed, then set `delivery.targets` to `[ { "method": "email", "email": "<email address>" } ]`
+- "Also send to Discord" / "Add Discord" → Preserve existing targets, guide the user through Discord Incoming Webhook setup, validate and save `DISCORD_WEBHOOK_URL`, then append `{ "method": "discord" }` if one is not already present
+- "Send to Telegram and Discord" → Configure both Telegram and Discord credentials, then set `delivery.targets` to `[ { "method": "telegram", "chatId": "<telegram chat ID>" }, { "method": "discord" } ]`
+- "Change my email" → Update the `{ "method": "email", "email": "<email address>" }` target in `delivery.targets`
+- "Send to this chat instead" → Set `delivery.targets` to `[ { "method": "stdout" } ]`
 
 ### Prompt Changes
 When a user wants to customize how their digest sounds, copy the relevant prompt
