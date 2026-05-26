@@ -4,7 +4,7 @@
 // Follow Builders — Prepare Digest
 // ============================================================================
 // Gathers everything the LLM needs to produce a digest:
-// - Fetches the central feeds (tweets + podcasts)
+// - Fetches the central feeds (tweets + podcasts + blogs + discovery)
 // - Fetches the latest prompts from GitHub
 // - Reads the user's config (language, delivery method)
 // - Outputs a single JSON blob to stdout
@@ -26,15 +26,17 @@ import { homedir } from 'os';
 const USER_DIR = join(homedir(), '.follow-builders');
 const CONFIG_PATH = join(USER_DIR, 'config.json');
 
-const FEED_X_URL = 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json';
-const FEED_PODCASTS_URL = 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-podcasts.json';
-const FEED_BLOGS_URL = 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-blogs.json';
+const FEED_X_URL = process.env.FOLLOW_BUILDERS_FEED_X_URL || 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json';
+const FEED_PODCASTS_URL = process.env.FOLLOW_BUILDERS_FEED_PODCASTS_URL || 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-podcasts.json';
+const FEED_BLOGS_URL = process.env.FOLLOW_BUILDERS_FEED_BLOGS_URL || 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-blogs.json';
+const FEED_DISCOVERY_URL = process.env.FOLLOW_BUILDERS_FEED_DISCOVERY_URL || 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-discovery.json';
 
-const PROMPTS_BASE = 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/prompts';
+const PROMPTS_BASE = process.env.FOLLOW_BUILDERS_PROMPTS_BASE || 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/prompts';
 const PROMPT_FILES = [
   'summarize-podcast.md',
   'summarize-tweets.md',
   'summarize-blogs.md',
+  'summarize-discovery.md',
   'digest-intro.md',
   'translate.md'
 ];
@@ -72,16 +74,18 @@ async function main() {
     }
   }
 
-  // 2. Fetch all three feeds
-  const [feedX, feedPodcasts, feedBlogs] = await Promise.all([
+  // 2. Fetch all feeds
+  const [feedX, feedPodcasts, feedBlogs, feedDiscovery] = await Promise.all([
     fetchJSON(FEED_X_URL),
     fetchJSON(FEED_PODCASTS_URL),
-    fetchJSON(FEED_BLOGS_URL)
+    fetchJSON(FEED_BLOGS_URL),
+    fetchJSON(FEED_DISCOVERY_URL)
   ]);
 
   if (!feedX) errors.push('Could not fetch tweet feed');
   if (!feedPodcasts) errors.push('Could not fetch podcast feed');
   if (!feedBlogs) errors.push('Could not fetch blog feed');
+  if (!feedDiscovery) errors.push('Could not fetch discovery feed');
 
   // 3. Load prompts with priority: user custom > remote (GitHub) > local default
   //
@@ -136,6 +140,7 @@ async function main() {
     podcasts: feedPodcasts?.podcasts || [],
     x: feedX?.x || [],
     blogs: feedBlogs?.blogs || [],
+    discovery: feedDiscovery?.discovery || [],
 
     // Stats for the LLM to reference
     stats: {
@@ -143,7 +148,8 @@ async function main() {
       xBuilders: feedX?.x?.length || 0,
       totalTweets: (feedX?.x || []).reduce((sum, a) => sum + a.tweets.length, 0),
       blogPosts: feedBlogs?.blogs?.length || 0,
-      feedGeneratedAt: feedX?.generatedAt || feedPodcasts?.generatedAt || feedBlogs?.generatedAt || null
+      discoveryItems: feedDiscovery?.discovery?.length || 0,
+      feedGeneratedAt: feedX?.generatedAt || feedPodcasts?.generatedAt || feedBlogs?.generatedAt || feedDiscovery?.generatedAt || null
     },
 
     // Prompts — the LLM reads these and follows the instructions
