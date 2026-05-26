@@ -250,14 +250,19 @@ async function sendTarget(target, digestText, options = {}) {
       };
     }
 
-    case 'stdout':
-    default:
+    case 'stdout': {
       if (printStdout) console.log(digestText);
       return {
         status: 'ok',
         method: 'stdout',
-        message: 'Digest printed to stdout'
+        message: printStdout
+          ? 'Digest printed to stdout'
+          : 'Digest stdout output suppressed in multi-target mode'
       };
+    }
+
+    default:
+      throw new Error(`Unsupported delivery method: ${target.method || 'stdout'}`);
   }
 }
 

@@ -376,6 +376,25 @@ test('mixed stdout target returns JSON-only summary without printing digest', as
   assert.equal(summary.status, 'ok');
   assert.deepEqual(summary.results.map(item => item.method), ['stdout', 'discord']);
   assert.deepEqual(summary.results.map(item => item.status), ['ok', 'ok']);
+  assert.equal(summary.results[0].message, 'Digest stdout output suppressed in multi-target mode');
+});
+
+test('unsupported target method returns error summary and exits non-zero', async t => {
+  const home = await makeTempHome();
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  await writeConfig(home, { delivery: { targets: [{ method: 'discod' }] } });
+
+  const result = await runDeliver({ home, message: 'Unsupported delivery digest' });
+
+  assert.equal(result.status, 1);
+  const summary = JSON.parse(result.stdout);
+  assert.equal(summary.status, 'error');
+  assert.deepEqual(summary.results, [{
+    status: 'error',
+    method: 'discod',
+    message: 'Unsupported delivery method: discod'
+  }]);
 });
 
 test('stdout default still prints only the digest text', async t => {
