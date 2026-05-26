@@ -92,6 +92,20 @@ esac
 `);
 }
 
+async function writeFalseSyncUniver(path, callsPath) {
+  await writeExecutable(path, `#!/bin/sh
+printf '%s\\n' "$*" >> "${callsPath}"
+case "$1 $2" in
+  "inspect workbook") echo "# workbook"; exit 0 ;;
+  "inspect range") echo "| contentId |"; exit 0 ;;
+  "run "*) printf 'mutated' > "$2/sentinel.txt"; echo '{"success":true,"inserted":2,"updated":0,"weeklyRows":2,"weekSheetName":"2026-W22"}'; exit 0 ;;
+  "commit "*) echo '{"success":true,"committed":true,"status":{"uncommittedMutationCount":0}}'; exit 0 ;;
+  "sync "*) echo '{"success":false,"error":"remote sync rejected","status":{"unitID":"unit-test-1","uncommittedMutationCount":0}}'; exit 0 ;;
+  *) echo "unexpected $*" >&2; exit 2 ;;
+esac
+`);
+}
+
 function extractGeneratedPayload(script) {
   const match = script.match(/const payload = (.*);\n  const DISPLAY_HEADER_ROW/s);
   assert.ok(match, 'generated script should embed a payload object');
@@ -318,6 +332,39 @@ test('fails clearly when sync reports uncommitted mutations after commit', async
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr + result.stdout, /uncommitted mutations/);
+  const loggedCalls = (await readFile(calls, 'utf-8')).trim().split('\n');
+  assert.match(loggedCalls[3], /^commit /);
+  assert.match(loggedCalls[4], /^sync /);
+});
+
+test('fails clearly without restoring workbook when sync JSON reports success false after commit', async t => {
+  const home = await mkdtemp(join(tmpdir(), 'fb-update-home-'));
+  const root = await mkdtemp(join(tmpdir(), 'fb-update-root-'));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  await writeConfig(home, workbookPath);
+  await mkdir(workbookPath, { recursive: true });
+  await writeFile(join(workbookPath, 'sentinel.txt'), 'original', 'utf-8');
+
+  const itemsPath = join(root, 'items.json');
+  await writeFile(itemsPath, JSON.stringify(validItemsPayload()), 'utf-8');
+
+  const fakeUniver = join(root, 'fake-univer');
+  const calls = join(root, 'calls.log');
+  await writeFalseSyncUniver(fakeUniver, calls);
+
+  const result = spawnSync(process.execPath, [
+    UPDATE,
+    '--home', home,
+    '--items-json', itemsPath,
+    '--univer-path', fakeUniver
+  ], { encoding: 'utf-8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /univer sync failed: remote sync rejected/);
+  assert.equal(await readFile(join(workbookPath, 'sentinel.txt'), 'utf-8'), 'mutated');
   const loggedCalls = (await readFile(calls, 'utf-8')).trim().split('\n');
   assert.match(loggedCalls[3], /^commit /);
   assert.match(loggedCalls[4], /^sync /);

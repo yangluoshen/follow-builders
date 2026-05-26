@@ -144,6 +144,12 @@ function assertNoUncommittedMutations(syncResult) {
   }
 }
 
+function assertSyncSucceeded(syncResult) {
+  if (syncResult?.success === false) {
+    throw new Error(`univer sync failed: ${syncResult.error || JSON.stringify(syncResult)}`);
+  }
+}
+
 async function backupWorkbook(workbookPath, tempDir) {
   const backupPath = join(tempDir, 'workbook-backup.univer');
   await rm(backupPath, { recursive: true, force: true });
@@ -466,6 +472,7 @@ export async function main(argv = process.argv.slice(2)) {
       throw err;
     }
     const syncResult = await runUniverJson(['sync', workbookPath], { univerPath: args.univerPath });
+    assertSyncSucceeded(syncResult);
     assertNoUncommittedMutations(syncResult);
     const publicUrl = config.univer?.publicUrl || publicUrlForUnit(config.univer?.unitId) || '';
 
