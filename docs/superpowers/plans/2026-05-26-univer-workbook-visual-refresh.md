@@ -662,8 +662,9 @@ In `SKILL.md`, under `## Univer Workbook Output`, add or update bullets so the s
 Weekly sheets use the Editorial Dashboard layout:
 
 - Rows 1-10 are dashboard content: dark title band, week metadata, KPI cards, and highlight cards.
-- Rows 12-14 introduce the daily digest table and render the stable table header.
-- Rows 15+ render weekly rows from `raw-data`, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
+- Rows 12-14 introduce the daily digest table.
+- Row 15 renders the stable table header.
+- Rows 16+ render weekly rows from `raw-data`, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
 - Dashboard metrics and highlights are computed by the workbook updater from weekly `raw-data` rows.
 - The LLM must not redesign workbook layout during daily runs. It only writes structured item content.
 - `raw-data` remains the source of truth and must not be visually optimized at the expense of stable indexing.

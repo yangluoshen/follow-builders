@@ -28,13 +28,13 @@ Rows 1-10 become the dashboard area.
 - A source mix chart or chart-ready range summarizes X / Podcast / Blog counts.
 - Highlight cards surface top content, such as top X item, top podcast item, and highest-score item.
 
-Rows 12-14 become a compact section transition and table header.
+Rows 12-14 become a compact section transition.
 
 - A small section label introduces the daily digest table.
-- The table header uses a strong but restrained color.
+- Row 15 renders the table header using a strong but restrained color.
 - Frozen rows should keep the dashboard context and header stable while scrolling.
 
-Rows 15 onward become the readable digest table.
+Rows 16 onward become the readable digest table.
 
 - Date, Type, Source, Title, Summary, Key Points, Topics, Score, URL, and contentId remain available.
 - Widths and row heights should prioritize reading `Title`, `Summary`, and `Key Points`.
