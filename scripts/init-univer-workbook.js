@@ -55,7 +55,7 @@ async function exists(path) {
 }
 
 function extractUnitId(syncResult) {
-  return syncResult.unitId || syncResult.unitID || syncResult.remoteUnitId || syncResult.status?.unitId;
+  return syncResult.unitId || syncResult.unitID || syncResult.remoteUnitId || syncResult.status?.unitId || syncResult.status?.unitID;
 }
 
 async function cleanupBackup(backupDir) {

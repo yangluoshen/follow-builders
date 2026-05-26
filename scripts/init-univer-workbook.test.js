@@ -24,7 +24,7 @@ async function pathExists(path) {
   }
 }
 
-async function writeFakeUniver(path, callsPath, syncBody = `echo '{"success":true,"unitId":"unit-test-1"}'; exit 0`) {
+async function writeFakeUniver(path, callsPath, syncBody = `echo '{"success":true,"status":{"unitID":"unit-test-1"}}'; exit 0`) {
   await writeExecutable(path, `#!/bin/sh
 printf '%s\\n' "$*" >> "${callsPath}"
 case "$1 $2" in
