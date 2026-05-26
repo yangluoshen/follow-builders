@@ -455,6 +455,7 @@ class FakeSheet {
   constructor(name) {
     this.name = name;
     this.cells = new Map();
+    this.formattedLastRow = -1;
   }
 
   key(row, column) {
@@ -479,7 +480,11 @@ class FakeSheet {
     for (const key of this.cells.keys()) {
       last = Math.max(last, Number(key.split(':')[0]));
     }
-    return last;
+    return Math.max(last, this.formattedLastRow);
+  }
+
+  markFormattedLastRow(row) {
+    this.formattedLastRow = Math.max(this.formattedLastRow, row);
   }
 
   setFrozenRows() { return this; }
@@ -582,4 +587,32 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
   assert.equal(runsSheet.getCell(2, 5), 0);
   assert.equal(runsSheet.getCell(2, 6), 1);
   assert.equal(weekSheet.getCell(15, 3), 'Updated agent update');
+});
+
+test('generated workbook-local script appends after last non-empty key row when sheets have formatted blank rows', () => {
+  const workbook = new FakeWorkbook();
+  workbook.create('raw-data').markFormattedLastRow(999);
+  workbook.create('runs').markFormattedLastRow(499);
+  const firstItem = validItemsPayload().items[0];
+  const script = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(firstItem, '2026-05-26T08:01:00.000Z')],
+    displayRows: groupWeeklyDisplayRows([firstItem]),
+    runRecord: runRecord(1, 'run-1'),
+    weekSheetName: '2026-W22'
+  });
+
+  assert.deepEqual(executeWorkbookRunScript(script, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  const rawSheet = workbook.getSheetByName('raw-data');
+  const runsSheet = workbook.getSheetByName('runs');
+  assert.equal(rawSheet.getCell(1, 0), 'x:1');
+  assert.equal(rawSheet.getCell(1000, 0), '');
+  assert.equal(runsSheet.getCell(1, 0), 'run-1');
+  assert.equal(runsSheet.getCell(500, 0), '');
 });

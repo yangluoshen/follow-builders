@@ -56,6 +56,11 @@
     return workbook.getSheetByName(name) || workbook.create(name, rows, columns);
   }
 
+  function stringValue(value) {
+    if (value === null || value === undefined) return '';
+    return String(value);
+  }
+
   function clearScaffoldArea(sheet, rows, columns) {
     sheet.getRange(0, 0, rows, columns).clear();
     if (sheet.clearConditionalFormatRules) sheet.clearConditionalFormatRules();
@@ -69,15 +74,14 @@
       .setVerticalAlignment('middle');
   }
 
-  function applyDataSheet(sheet, headers, rows, widths) {
-    clearScaffoldArea(sheet, rows, headers.length);
+  function applyDataSheet(sheet, headers, widths) {
+    sheet.getRange(0, 0, 1, headers.length).clear();
     sheet.getRange(0, 0, 1, headers.length).setValues([headers]);
     styleHeader(sheet.getRange(0, 0, 1, headers.length), '#17324D');
     sheet.setFrozenRows(1);
     sheet.setFrozenColumns(1);
     sheet.setHiddenGridlines(false);
     sheet.setRowHeight(0, 30);
-    sheet.getRange(0, 0, rows, headers.length).setVerticalAlignment('top');
     widths.forEach((width, index) => sheet.setColumnWidth(index, width));
   }
 
@@ -154,7 +158,7 @@
     const runsSheet = ensureSheet(workbook, 'runs', 500, RUNS_HEADERS.length);
     const weekSheet = ensureSheet(workbook, '_week-template', 240, WEEK_DISPLAY_HEADERS.length);
 
-    applyDataSheet(rawSheet, RAW_DATA_HEADERS, 1000, [
+    applyDataSheet(rawSheet, RAW_DATA_HEADERS, [
       190,
       110,
       160,
@@ -176,7 +180,7 @@
       220,
       190
     ]);
-    applyDataSheet(runsSheet, RUNS_HEADERS, 500, [
+    applyDataSheet(runsSheet, RUNS_HEADERS, [
       260,
       190,
       190,
@@ -194,8 +198,16 @@
     applyWeekTemplate(weekSheet);
 
     const allowedSheetNames = new Set(SHEET_NAMES);
+    const bootstrapSheetNames = new Set(['Sheet1', 'Sheet 1', 'sheet1']);
     workbook.getSheets().forEach(sheet => {
-      if (!allowedSheetNames.has(sheet.getSheetName())) {
+      const sheetName = sheet.getSheetName();
+      const isBlankBootstrapSheet =
+        bootstrapSheetNames.has(sheetName) &&
+        (
+          (sheet.getLastRow() < 0 && sheet.getLastColumn() < 0) ||
+          (sheet.getLastRow() === 0 && sheet.getLastColumn() === 0 && !stringValue(sheet.getRange(0, 0).getValue()))
+        );
+      if (!allowedSheetNames.has(sheetName) && isBlankBootstrapSheet) {
         workbook.deleteSheet(sheet.getSheetId());
       }
     });

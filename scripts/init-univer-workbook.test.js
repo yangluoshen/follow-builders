@@ -35,6 +35,11 @@ esac
 `);
 }
 
+async function writeFakeWorkbookPackage(path, markerText) {
+  await mkdir(join(path, 'data'), { recursive: true });
+  await writeFile(join(path, 'data', 'marker.txt'), markerText, 'utf-8');
+}
+
 test('initializes workbook from template and saves public URL', async t => {
   const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
   const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
@@ -42,7 +47,7 @@ test('initializes workbook from template and saves public URL', async t => {
   t.after(() => rm(home, { recursive: true, force: true }));
 
   await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFile(join(root, 'templates', 'follow-builders.univer'), 'template', 'utf-8');
+  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
 
   const fakeUniver = join(root, 'fake-univer');
   const calls = join(root, 'calls.log');
@@ -57,6 +62,7 @@ test('initializes workbook from template and saves public URL', async t => {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
+  assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'template');
   const config = JSON.parse(await readFile(join(home, '.follow-builders', 'config.json'), 'utf-8'));
   assert.equal(config.univer.unitId, 'unit-test-1');
   assert.equal(config.univer.publicUrl, 'https://univer.ai/space/sheets/unit-test-1');
@@ -94,7 +100,7 @@ test('rejects option flags without values before using default home', async t =>
   t.after(() => rm(guardHome, { recursive: true, force: true }));
 
   await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFile(join(root, 'templates', 'follow-builders.univer'), 'template', 'utf-8');
+  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
 
   const fakeUniver = join(root, 'fake-univer');
   await writeFakeUniver(fakeUniver, join(root, 'calls.log'));
@@ -121,10 +127,10 @@ test('restores existing workbook when forced sync fails after overwrite', async 
   t.after(() => rm(home, { recursive: true, force: true }));
 
   await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFile(join(root, 'templates', 'follow-builders.univer'), 'replacement', 'utf-8');
+  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'replacement');
   await mkdir(join(home, '.follow-builders'), { recursive: true });
   const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
-  await writeFile(workbookPath, 'original', 'utf-8');
+  await writeFakeWorkbookPackage(workbookPath, 'original');
 
   const fakeUniver = join(root, 'fake-univer');
   await writeFakeUniver(fakeUniver, join(root, 'calls.log'), 'echo "sync failed" >&2; exit 9');
@@ -139,7 +145,7 @@ test('restores existing workbook when forced sync fails after overwrite', async 
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr + result.stdout, /sync failed/);
-  assert.equal(await readFile(workbookPath, 'utf-8'), 'original');
+  assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'original');
 });
 
 test('uses existing workbook without recopying when force is not set', async t => {
@@ -149,10 +155,10 @@ test('uses existing workbook without recopying when force is not set', async t =
   t.after(() => rm(home, { recursive: true, force: true }));
 
   await mkdir(join(root, 'templates'), { recursive: true });
-  await writeFile(join(root, 'templates', 'follow-builders.univer'), 'template', 'utf-8');
+  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
   await mkdir(join(home, '.follow-builders'), { recursive: true });
   const workbookPath = join(home, '.follow-builders', 'follow-builders.univer');
-  await writeFile(workbookPath, 'existing', 'utf-8');
+  await writeFakeWorkbookPackage(workbookPath, 'existing');
 
   const fakeUniver = join(root, 'fake-univer');
   const calls = join(root, 'calls.log');
@@ -166,7 +172,7 @@ test('uses existing workbook without recopying when force is not set', async t =
   ], { encoding: 'utf-8' });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(await readFile(workbookPath, 'utf-8'), 'existing');
+  assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'existing');
   assert.deepEqual((await readFile(calls, 'utf-8')).trim().split('\n'), [
     `inspect workbook ${workbookPath}`,
     `sync ${workbookPath} --json`

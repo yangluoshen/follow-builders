@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { access, copyFile, mkdir, mkdtemp, rm } from 'fs/promises';
+import { access, cp, mkdir, mkdtemp, rm } from 'fs/promises';
 import { constants } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -62,6 +62,11 @@ async function cleanupBackup(backupDir) {
   if (backupDir) await rm(backupDir, { recursive: true, force: true });
 }
 
+async function replacePath(source, destination) {
+  await rm(destination, { recursive: true, force: true });
+  await cp(source, destination, { recursive: true });
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -82,7 +87,7 @@ async function main() {
   if (hasWorkbook && args.force) {
     backupDir = await mkdtemp(join(tmpdir(), 'follow-builders-univer-backup-'));
     backupPath = join(backupDir, 'follow-builders.univer');
-    await copyFile(workbookPath, backupPath);
+    await replacePath(workbookPath, backupPath);
   }
 
   try {
@@ -90,7 +95,7 @@ async function main() {
       const templatePath = join(args.skillDir, WORKBOOK_TEMPLATE_PATH);
       await mkdir(dirname(workbookPath), { recursive: true });
       shouldRestoreBackup = Boolean(backupPath);
-      await copyFile(templatePath, workbookPath);
+      await replacePath(templatePath, workbookPath);
     }
 
     await runUniver(['inspect', 'workbook', workbookPath], { univerPath: args.univerPath });
@@ -117,7 +122,7 @@ async function main() {
   } catch (err) {
     if (shouldRestoreBackup) {
       try {
-        await copyFile(backupPath, workbookPath);
+        await replacePath(backupPath, workbookPath);
       } catch (restoreErr) {
         err.message = `${err.message}; additionally failed to restore workbook backup: ${restoreErr.message}`;
       }

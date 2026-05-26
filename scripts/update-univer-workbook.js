@@ -233,8 +233,19 @@ export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSh
     setHeader(sheet, headers);
   }
 
-  function nextAppendRow(sheet) {
-    return Math.max(sheet.getLastRow() + 1, 1);
+  function lastNonEmptyRowInColumn(sheet, column, startRow) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow < startRow) return startRow - 1;
+    const values = sheet.getRange(startRow, column, lastRow - startRow + 1, 1).getValues();
+    let lastNonEmpty = startRow - 1;
+    values.forEach((row, offset) => {
+      if (stringValue(row[0])) lastNonEmpty = startRow + offset;
+    });
+    return lastNonEmpty;
+  }
+
+  function nextAppendRow(sheet, keyColumn) {
+    return Math.max(lastNonEmptyRowInColumn(sheet, keyColumn, 1) + 1, 1);
   }
 
   function existingRawRowIndex(sheet) {
@@ -260,7 +271,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSh
         sheet.getRange(rowIndex.get(contentId), 0, 1, payload.rawHeaders.length).setValues([row]);
         updated += 1;
       } else {
-        const appendRow = nextAppendRow(sheet);
+        const appendRow = nextAppendRow(sheet, 0);
         sheet.getRange(appendRow, 0, 1, payload.rawHeaders.length).setValues([row]);
         rowIndex.set(contentId, appendRow);
         inserted += 1;
@@ -286,7 +297,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSh
       run.publicUrl,
       run.errorSummary
     ];
-    sheet.getRange(nextAppendRow(sheet), 0, 1, payload.runsHeaders.length).setValues([row]);
+    sheet.getRange(nextAppendRow(sheet, 0), 0, 1, payload.runsHeaders.length).setValues([row]);
   }
 
   function applyDataSheetFormatting(sheet, width) {
