@@ -148,6 +148,34 @@ test('restores existing workbook when forced sync fails after overwrite', async 
   assert.equal(await readFile(join(workbookPath, 'data', 'marker.txt'), 'utf-8'), 'original');
 });
 
+test('rejects unsuccessful sync JSON even when a unit id is present', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
+  const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(home, { recursive: true, force: true }));
+
+  await mkdir(join(root, 'templates'), { recursive: true });
+  await writeFakeWorkbookPackage(join(root, 'templates', 'follow-builders.univer'), 'template');
+
+  const fakeUniver = join(root, 'fake-univer');
+  await writeFakeUniver(
+    fakeUniver,
+    join(root, 'calls.log'),
+    `echo '{"success":false,"unitId":"unit-bad","error":"sync rejected"}'; exit 0`
+  );
+
+  const result = spawnSync(process.execPath, [
+    INIT,
+    '--skill-dir', root,
+    '--home', home,
+    '--univer-path', fakeUniver
+  ], { encoding: 'utf-8' });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr + result.stdout, /univer sync failed: sync rejected/);
+  assert.equal(await pathExists(join(home, '.follow-builders', 'config.json')), false);
+});
+
 test('uses existing workbook without recopying when force is not set', async t => {
   const root = await mkdtemp(join(tmpdir(), 'fb-init-root-'));
   const home = await mkdtemp(join(tmpdir(), 'fb-init-home-'));

@@ -101,6 +101,15 @@ test('validateItemsPayload rejects malformed payloads', () => {
     () => validateItemsPayload({ items: [{ sourceType: 'x', title: 'missing id' }] }),
     /items\[0\]\.contentId is required/
   );
+  assert.throws(
+    () => validateItemsPayload({ items: [{
+      contentId: 'tweet-1',
+      sourceType: 'x',
+      title: 'bad id',
+      url: 'https://x.com/a/status/1'
+    }] }),
+    /items\[0\]\.contentId must start with x:/
+  );
   assert.doesNotThrow(() => validateItemsPayload({
     runId: 'run-1',
     generatedAt: '2026-05-26T00:00:00.000Z',

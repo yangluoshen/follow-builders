@@ -108,6 +108,17 @@ function requireString(value, label) {
   if (!value || typeof value !== 'string') throw new Error(`${label} is required`);
 }
 
+function requireContentIdForSource(item, index) {
+  const requiredPrefix = {
+    x: 'x:',
+    podcast: 'podcast:',
+    blog: 'blog:'
+  }[item.sourceType];
+  if (requiredPrefix && !item.contentId.startsWith(requiredPrefix)) {
+    throw new Error(`items[${index}].contentId must start with ${requiredPrefix}`);
+  }
+}
+
 export function validateItemsPayload(payload) {
   if (!payload || typeof payload !== 'object') throw new Error('items payload must be an object');
   if (!Array.isArray(payload.items)) throw new Error('items payload must include items array');
@@ -119,6 +130,7 @@ export function validateItemsPayload(payload) {
     if (!['x', 'podcast', 'blog'].includes(item.sourceType)) {
       throw new Error(`items[${index}].sourceType must be x, podcast, or blog`);
     }
+    requireContentIdForSource(item, index);
   });
   return payload;
 }

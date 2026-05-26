@@ -12,7 +12,6 @@ import {
   RUNS_HEADERS,
   SHEETS,
   WEEK_DISPLAY_HEADERS,
-  groupWeeklyDisplayRows,
   mapItemToRawRow,
   publicUrlForUnit,
   validateItemsPayload
@@ -79,6 +78,22 @@ export function isoWeekName(value = new Date()) {
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
   const week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+export function isoWeekDateRange(value = new Date()) {
+  const input = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(input.getTime())) {
+    throw new Error(`Invalid date for ISO week: ${value}`);
+  }
+  const start = new Date(Date.UTC(input.getUTCFullYear(), input.getUTCMonth(), input.getUTCDate()));
+  const day = start.getUTCDay() || 7;
+  start.setUTCDate(start.getUTCDate() + 1 - day);
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10)
+  };
 }
 
 function dedupeItemsByContentId(items) {
@@ -170,7 +185,7 @@ function normalizeRows(rows, width) {
   });
 }
 
-export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSheetName }) {
+export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, weekSheetName, weekStartDate = '', weekEndDate = '' }) {
   const payload = {
     rawHeaders: RAW_DATA_HEADERS,
     runsHeaders: RUNS_HEADERS,
@@ -178,6 +193,8 @@ export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSh
     rawRows: normalizeRows(rawRows, RAW_DATA_HEADERS.length),
     displayRows: normalizeRows(displayRows, WEEK_DISPLAY_HEADERS.length),
     runRecord,
+    weekStartDate,
+    weekEndDate,
     sheetNames: {
       rawData: SHEETS.rawData,
       runs: SHEETS.runs,
@@ -312,8 +329,43 @@ export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSh
     sheet.setColumnWidth(12, 260);
   }
 
-  function renderWeeklySheet(sheet, inserted, updated) {
-    const rows = payload.displayRows;
+  function buildWeeklyRowsFromRaw(sheet) {
+    if (!payload.weekStartDate || !payload.weekEndDate) return payload.displayRows;
+    const lastRow = lastNonEmptyRowInColumn(sheet, 0, 1);
+    if (lastRow < 1) return [];
+    const sourceLabels = { x: 'X', podcast: 'Podcast', blog: 'Blog' };
+    const sourceOrder = { x: 0, podcast: 1, blog: 2 };
+    const values = sheet.getRange(1, 0, lastRow, payload.rawHeaders.length).getValues();
+    return values
+      .filter(row => {
+        const contentId = stringValue(row[0]);
+        const runDate = stringValue(row[9]);
+        return contentId && runDate >= payload.weekStartDate && runDate <= payload.weekEndDate;
+      })
+      .sort((a, b) => {
+        const dateCompare = stringValue(b[9]).localeCompare(stringValue(a[9]));
+        if (dateCompare !== 0) return dateCompare;
+        const sourceCompare = (sourceOrder[stringValue(a[1])] ?? 99) - (sourceOrder[stringValue(b[1])] ?? 99);
+        if (sourceCompare !== 0) return sourceCompare;
+        const publishedCompare = stringValue(b[7]).localeCompare(stringValue(a[7]));
+        if (publishedCompare !== 0) return publishedCompare;
+        return Number(b[14] || 0) - Number(a[14] || 0);
+      })
+      .map(row => [
+        stringValue(row[9]),
+        sourceLabels[stringValue(row[1])] || stringValue(row[1]),
+        stringValue(row[2]) || stringValue(row[3]),
+        stringValue(row[5]),
+        stringValue(row[11]),
+        stringValue(row[12]),
+        stringValue(row[13]),
+        Number.isFinite(Number(row[14])) ? Number(row[14]) : '',
+        stringValue(row[6]),
+        stringValue(row[0])
+      ]);
+  }
+
+  function renderWeeklySheet(sheet, inserted, updated, rows) {
     const headers = payload.weekHeaders;
     sheet.setHiddenGridlines(true);
     sheet.setFrozenRows(15);
@@ -330,7 +382,7 @@ export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSh
 
     sheet.getRange(1, 0, 7, 2).setValues([
       ['Generated at', payload.runRecord.finishedAt],
-      ['Items in update', rows.length],
+      ['Items this week', rows.length],
       ['Inserted raw rows', inserted],
       ['Updated raw rows', updated],
       ['Public URL', payload.runRecord.publicUrl],
@@ -381,13 +433,14 @@ export function buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSh
 
     const result = upsertRawRows(rawSheet, payload.rawRows);
     appendRunRow(runsSheet, result.inserted, result.updated);
-    renderWeeklySheet(weekSheet, result.inserted, result.updated);
+    const weeklyRows = buildWeeklyRowsFromRaw(rawSheet);
+    renderWeeklySheet(weekSheet, result.inserted, result.updated, weeklyRows);
 
     return {
       success: true,
       inserted: result.inserted,
       updated: result.updated,
-      weeklyRows: payload.displayRows.length,
+      weeklyRows: weeklyRows.length,
       weekSheetName: payload.sheetNames.week
     };
   } catch (err) {
@@ -437,9 +490,9 @@ export async function main(argv = process.argv.slice(2)) {
   const originalItemsSeen = Array.isArray(payload.originalItems) ? payload.originalItems.length : payload.items.length;
   const generatedAt = payload.generatedAt || startedAt;
   const weekSheetName = isoWeekName(generatedAt);
+  const weekRange = isoWeekDateRange(generatedAt);
   const finishedAt = new Date().toISOString();
   const rawRows = payload.items.map(item => mapItemToRawRow(item, finishedAt));
-  const displayRows = groupWeeklyDisplayRows(payload.items);
   const runRecord = buildRunRecord({
     payload,
     itemsJsonPath: args.itemsJsonPath,
@@ -454,7 +507,13 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     tempDir = await mkdtemp(join(tmpdir(), 'follow-builders-univer-update-'));
     const runFile = join(tempDir, 'update-workbook.js');
-    await writeFile(runFile, buildWorkbookRunScript({ rawRows, displayRows, runRecord, weekSheetName }), 'utf-8');
+    await writeFile(runFile, buildWorkbookRunScript({
+      rawRows,
+      runRecord,
+      weekSheetName,
+      weekStartDate: weekRange.startDate,
+      weekEndDate: weekRange.endDate
+    }), 'utf-8');
 
     await runUniver(['inspect', 'workbook', workbookPath], { univerPath: args.univerPath });
     const backupPath = await backupWorkbook(workbookPath, tempDir);

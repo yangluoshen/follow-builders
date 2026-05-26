@@ -589,6 +589,55 @@ test('generated workbook-local script initializes headers, upserts raw rows, app
   assert.equal(weekSheet.getCell(15, 3), 'Updated agent update');
 });
 
+test('generated workbook-local script renders the weekly sheet from raw-data history', () => {
+  const workbook = new FakeWorkbook();
+  const currentItem = validItemsPayload().items[0];
+  const previousItem = {
+    ...currentItem,
+    contentId: 'x:previous',
+    title: 'Previous day update',
+    summary: 'Previous summary',
+    publishedAt: '2026-05-25T07:00:00.000Z',
+    runDate: '2026-05-25'
+  };
+
+  const firstRun = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(previousItem, '2026-05-25T08:01:00.000Z')],
+    runRecord: runRecord(1, 'run-previous'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+  assert.deepEqual(executeWorkbookRunScript(firstRun, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 1,
+    weekSheetName: '2026-W22'
+  });
+
+  const secondRun = buildWorkbookRunScript({
+    rawRows: [mapItemToRawRow(currentItem, '2026-05-26T08:01:00.000Z')],
+    runRecord: runRecord(1, 'run-current'),
+    weekSheetName: '2026-W22',
+    weekStartDate: '2026-05-25',
+    weekEndDate: '2026-05-31'
+  });
+  assert.deepEqual(executeWorkbookRunScript(secondRun, workbook), {
+    success: true,
+    inserted: 1,
+    updated: 0,
+    weeklyRows: 2,
+    weekSheetName: '2026-W22'
+  });
+
+  const weekSheet = workbook.getSheetByName('2026-W22');
+  assert.equal(weekSheet.getCell(15, 0), '2026-05-26');
+  assert.equal(weekSheet.getCell(15, 3), 'Agent update');
+  assert.equal(weekSheet.getCell(16, 0), '2026-05-25');
+  assert.equal(weekSheet.getCell(16, 3), 'Previous day update');
+});
+
 test('generated workbook-local script appends after last non-empty key row when sheets have formatted blank rows', () => {
   const workbook = new FakeWorkbook();
   workbook.create('raw-data').markFormattedLastRow(999);

@@ -58,6 +58,12 @@ function extractUnitId(syncResult) {
   return syncResult.unitId || syncResult.unitID || syncResult.remoteUnitId || syncResult.status?.unitId || syncResult.status?.unitID;
 }
 
+function assertSyncSucceeded(syncResult) {
+  if (syncResult?.success === false) {
+    throw new Error(`univer sync failed: ${syncResult.error || JSON.stringify(syncResult)}`);
+  }
+}
+
 async function cleanupBackup(backupDir) {
   if (backupDir) await rm(backupDir, { recursive: true, force: true });
 }
@@ -100,6 +106,7 @@ async function main() {
 
     await runUniver(['inspect', 'workbook', workbookPath], { univerPath: args.univerPath });
     const syncResult = await runUniverJson(['sync', workbookPath], { univerPath: args.univerPath });
+    assertSyncSucceeded(syncResult);
     const unitId = extractUnitId(syncResult);
     if (!unitId) {
       throw new Error(`univer sync did not return a unitId: ${JSON.stringify(syncResult)}`);
