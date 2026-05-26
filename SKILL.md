@@ -393,16 +393,17 @@ workbook path.
 
 ### Weekly Sheet Presentation Contract
 
-Weekly sheets use the Editorial Dashboard layout:
+Weekly sheets use the Analyst Console layout:
 
 - Row 1 is the dark title band: `<week> Follow Builders`.
 - Row 2 is the week metadata line.
-- Row 3 contains KPI labels at A/C/E/G/I.
-- Rows 4-5 contain KPI cards for total, X, Podcast, Blog, and Avg Score. The cards use formulas against `raw-data` where practical.
-- Row 6 introduces the Daily Digest table.
-- Row 7 renders the stable table header.
-- Rows 8+ render formula/reference rows into sorted `raw-data` rows, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
-- Weekly sheets freeze the top 7 rows and do not freeze columns.
+- Row 3 is a compact control/status strip with Source, Score, Topic, Date, Sort, and View cells.
+- Rows 4-5 contain KPI cards for Items, X, Podcast, Blog, Median, and Low Score. The cards use formulas against `raw-data` where practical.
+- Rows 6-10 contain analytical panels for Topic Heat, Score Distribution, and Daily Volume. Panels use formulas, conditional formatting, helper ranges, and charts where supported.
+- Row 11 renders the stable table header.
+- Rows 12+ render formula/reference rows into sorted `raw-data` rows, sorted by date desc, then source order `X`, `Podcast`, `Blog`, then published time desc, then score desc.
+- Weekly sheets do not freeze rows or columns. Use `setFrozenRows(0)` and `setFrozenColumns(0)` so the bottom viewport remains usable.
+- Helper ranges may live to the right of column `J` and should stay visually secondary or hidden.
 - The LLM must not redesign workbook layout during daily runs. It only writes structured item content.
 - `raw-data` remains the source of truth and must not be visually optimized at the expense of stable indexing.
 
