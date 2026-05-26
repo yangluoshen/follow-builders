@@ -79,6 +79,10 @@ function parseA1Range(a1) {
   };
 }
 
+function cellValue(sheet, row, column) {
+  return sheet.cells.get(sheet.key(row, column)) ?? '';
+}
+
 class ScaffoldFakeRange {
   constructor(sheet, row, column, rowCount, columnCount) {
     Object.assign(this, { sheet, row, column, rowCount, columnCount });
@@ -90,6 +94,13 @@ class ScaffoldFakeRange {
   setValue(value) {
     this.sheet.setCell(this.row, this.column, value);
     return this;
+  }
+  getValues() {
+    return Array.from({ length: this.rowCount }, (_, rowOffset) => (
+      Array.from({ length: this.columnCount }, (_, columnOffset) => (
+        cellValue(this.sheet, this.row + rowOffset, this.column + columnOffset)
+      ))
+    ));
   }
   setValues(values) {
     values.forEach((row, rowOffset) => {
@@ -135,7 +146,6 @@ class ScaffoldFakeSheet {
     if (value === '') this.cells.delete(this.key(row, column));
     else this.cells.set(this.key(row, column), value);
   }
-  getCell(row, column) { return this.cells.get(this.key(row, column)) ?? ''; }
   getLastRow() { return 0; }
   getLastColumn() { return 0; }
   getMaxRows() { return this.rows; }
@@ -241,15 +251,31 @@ test('scaffold uses compact week template controls, KPIs, and visible column wid
   const result = await runScaffoldWithWorkbook(workbook);
 
   assert.equal(result.success, true, result.error);
-  assert.equal(weekSheet.getCell(2, 6), 'Date\nWeek');
-  assert.equal(weekSheet.getCell(2, 7), 'Sort');
-  assert.equal(weekSheet.getCell(2, 8), 'Signal');
-  assert.equal(weekSheet.getCell(2, 9), 'View\nDigest');
-  assert.equal(weekSheet.getCell(3, 8), 'MEDIAN');
-  assert.equal(weekSheet.getCell(3, 9), 'LOW SCORE');
-  assert.equal(weekSheet.getCell(4, 8), '=IF(COUNT(H12:H2000)>0,MEDIAN(H12:H2000),"-")');
-  assert.doesNotMatch(weekSheet.getCell(4, 8), /VALUE\(/);
-  assert.doesNotMatch(weekSheet.getCell(4, 8), /O:O|J:J|O2:O|J2:J|<weekStart>/);
+  assert.equal(cellValue(weekSheet, 2, 6), 'Date\nWeek');
+  assert.equal(cellValue(weekSheet, 2, 7), 'Sort');
+  assert.equal(cellValue(weekSheet, 2, 8), 'Signal');
+  assert.equal(cellValue(weekSheet, 2, 9), 'View\nDigest');
+  assert.equal(cellValue(weekSheet, 3, 8), 'MEDIAN');
+  assert.equal(cellValue(weekSheet, 3, 9), 'LOW SCORE');
+  assert.equal(cellValue(weekSheet, 4, 8), '=IF(COUNT(H12:H2000)>0,MEDIAN(H12:H2000),"-")');
+  assert.doesNotMatch(cellValue(weekSheet, 4, 8), /VALUE\(/);
+  assert.doesNotMatch(cellValue(weekSheet, 4, 8), /O:O|J:J|O2:O|J2:J|<weekStart>/);
+  assert.deepEqual(weekSheet.getRange('A7:D9').getValues(), [
+    ['AI agents', '=M17', '=N17', '=O17'],
+    ['Open models', '=M18', '=N18', '=O18'],
+    ['Research', '=M19', '=N19', '=O19']
+  ]);
+  assert.deepEqual(weekSheet.getRange('E7:G9').getValues(), [
+    ['80+', '=M3', '=M3'],
+    ['50-79', '=M4', '=M4'],
+    ['<50', '=M5', '=M5']
+  ]);
+  assert.deepEqual(weekSheet.getRange('H7:J10').getValues(), [
+    ['Mon', 'Tue', 'Wed'],
+    ['=M8', '=M9', '=M10'],
+    ['=M11', '=M12', '=SUM(M13:M14)'],
+    ['Thu', 'Fri', 'Sat/Sun']
+  ]);
   assert.deepEqual(
     Array.from({ length: 10 }, (_, index) => weekSheet.columnWidths.get(index)),
     [78, 58, 118, 220, 260, 220, 120, 62, 150, 86]

@@ -233,9 +233,9 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     muted: '#475569',
     tableHeader: '#1F4E79',
     tableAlt: '#F8FBFF',
-    heatLow: '#F8FAFC',
-    heatMedium: '#BFDBFE',
-    heatHigh: '#2563EB',
+    heatLow: '#DBEAFE',
+    heatMedium: '#60A5FA',
+    heatHigh: '#1D4ED8',
     heatAccent: '#F59E0B'
   };
 
@@ -626,6 +626,26 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
       .map(entry => entry.label);
   }
 
+  function topicSourceCountsFromRaw(rawSheet, topics) {
+    const counts = new Map();
+    topics.forEach(topic => counts.set(normalizeTopic(topic), { x: 0, podcast: 0, blog: 0 }));
+    const lastRow = lastNonEmptyRowInColumn(rawSheet, 0, 1);
+    if (lastRow < 1) return counts;
+    const values = rawSheet.getRange(1, 0, lastRow, payload.rawHeaders.length).getValues();
+    values.forEach(row => {
+      const runDate = stringValue(row[9]);
+      if (payload.weekStartDate && runDate < payload.weekStartDate) return;
+      if (payload.weekEndDate && runDate > payload.weekEndDate) return;
+      const source = sourceTypeFromDisplayType(row[1]);
+      if (!['x', 'podcast', 'blog'].includes(source)) return;
+      splitTopics(row[13]).forEach(topic => {
+        const entry = counts.get(normalizeTopic(topic));
+        if (entry) entry[source] += 1;
+      });
+    });
+    return counts;
+  }
+
   function topicCountFormula(topic, sourceType) {
     if (!topic || topic === '-' || !payload.weekStartDate || !payload.weekEndDate) return '';
     const escaped = String(topic)
@@ -738,74 +758,44 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
   }
 
   function applyAnalyticsConditionalFormatting(sheet) {
-    if (typeof sheet.newConditionalFormattingRule !== 'function' || typeof sheet.addConditionalFormattingRule !== 'function') return;
-    const scoreBars = sheet
-      .newConditionalFormattingRule()
-      .setDataBar({
-        min: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 0 },
-        max: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 100 },
-        positiveColor: COLORS.x,
-        nativeColor: COLORS.lowScore,
-        isGradient: true,
-        isShowValue: true
-      })
-      .setRanges([sheet.getRange('F7:F9').getRange()])
-      .build();
-    sheet.addConditionalFormattingRule(scoreBars);
-
-    const topicHeat = sheet
-      .newConditionalFormattingRule()
-      .setColorScale([
-        { index: 0, color: COLORS.heatLow, value: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 0 } },
-        { index: 1, color: COLORS.heatMedium, value: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 2 } },
-        { index: 2, color: COLORS.heatHigh, value: { type: univerAPI.Enum.ConditionFormatValueTypeEnum.num, value: 5 } }
-      ])
-      .setRanges([sheet.getRange('B7:D9').getRange()])
-      .build();
-    sheet.addConditionalFormattingRule(topicHeat);
+    return sheet;
   }
 
   async function resetCharts(sheet) {
     try {
-      if (typeof sheet.getCharts !== 'function' || typeof sheet.removeChart !== 'function') return true;
-      const charts = sheet.getCharts();
+      if (typeof sheet.getCharts !== 'function' && typeof sheet.removeChart !== 'function') return;
+      if (typeof sheet.getCharts !== 'function' || typeof sheet.removeChart !== 'function') {
+        throw new Error('incomplete chart cleanup API');
+      }
+      const charts = await sheet.getCharts();
       for (const chart of charts) {
         await sheet.removeChart(chart);
       }
-      return true;
     } catch (err) {
-      return false;
+      throw new Error('Could not remove stale charts from ' + payload.sheetNames.week + ': ' + err.message);
     }
   }
 
   async function insertDailyVolumeChart(sheet) {
-    try {
-      if (typeof sheet.newChart !== 'function' || typeof sheet.insertChart !== 'function') return false;
-      const chartInfo = sheet
-        .newChart()
-        .setChartType(univerAPI.Enum.ChartType.Column)
-        .addRange('L7:M14')
-        .setPosition(5, 7, 0, 0)
-        .setWidth(300)
-        .setHeight(128)
-        .setOptions('title.content', 'Daily Volume')
-        .build();
-      await sheet.insertChart(chartInfo);
-      return true;
-    } catch (err) {
-      return false;
-    }
+    // Charts rendered as overlay artifacts in Univer; the sheet-native bars are the stable primary view.
+    return false;
   }
 
   function renderDailyVolumeFallback(sheet) {
     sheet.getRange('H7:J10').setValues([
-      ['Date', 'Items', ''],
-      [dateAddFormula(0), dailyVolumeFormula(0), ''],
-      [dateAddFormula(1), dailyVolumeFormula(1), ''],
-      [dateAddFormula(2), dailyVolumeFormula(2), '']
+      ['Mon', 'Tue', 'Wed'],
+      ['=M8', '=M9', '=M10'],
+      ['=M11', '=M12', '=SUM(M13:M14)'],
+      ['Thu', 'Fri', 'Sat/Sun']
     ]);
     sheet.getRange('H7:J10').setFontSize(10).setVerticalAlignment('middle');
-    sheet.getRange('H7:I7').setFontWeight('bold').setFontColor(COLORS.panelText);
+    sheet.getRange('H7:J7').setFontWeight('bold').setFontColor(COLORS.panelText).setHorizontalAlignment('center');
+    sheet.getRange('H10:J10').setFontWeight('bold').setFontColor(COLORS.panelText).setHorizontalAlignment('center');
+    sheet.getRange('H8:J9')
+      .setBackgroundColor(COLORS.x)
+      .setFontColor(COLORS.x)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
   }
 
   function a1ToCell(a1) {
@@ -825,13 +815,14 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     const displayRows = rows.map(weeklyDisplayRow);
     const topics = topTopicsFromRaw(rawSheet, 3);
     while (topics.length < 3) topics.push('-');
+    const topicCounts = topicSourceCountsFromRaw(rawSheet, topics);
     ensureSheetColumns(sheet, weeklySheetColumns());
 
     sheet.setHiddenGridlines(true);
     sheet.setFrozenRows(0);
     sheet.setFrozenColumns(0);
     clearWeeklyFormatting(sheet);
-    const chartsReset = await resetCharts(sheet);
+    await resetCharts(sheet);
 
     const staleClearRows = Math.max(sheet.getLastRow() - DISPLAY_DATA_ROW + 1, rows.length + TABLE_CLEAR_EXTRA_ROWS, 1);
     const maxRows = sheetRowCapacity(sheet);
@@ -917,19 +908,51 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
     sheet.getRange('A6:J6').setFontWeight('bold').setFontColor(COLORS.panelText).setFontSize(10);
 
     sheet.getRange('A7:D9').setValues([
-      [topics[0], topicCountFormula(topics[0], 'x'), topicCountFormula(topics[0], 'podcast'), topicCountFormula(topics[0], 'blog')],
-      [topics[1], topicCountFormula(topics[1], 'x'), topicCountFormula(topics[1], 'podcast'), topicCountFormula(topics[1], 'blog')],
-      [topics[2], topicCountFormula(topics[2], 'x'), topicCountFormula(topics[2], 'podcast'), topicCountFormula(topics[2], 'blog')]
+      [topics[0], '=M17', '=N17', '=O17'],
+      [topics[1], '=M18', '=N18', '=O18'],
+      [topics[2], '=M19', '=N19', '=O19']
     ]);
     sheet.getRange('B10:D10').setValues([['X', 'Podcast', 'Blog']]);
     sheet.getRange('A7:D10').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange('A7:A9').setFontColor(COLORS.panelText).setFontWeight('bold');
+    sheet.getRange('B10:D10').setFontColor(COLORS.muted).setFontWeight('bold').setHorizontalAlignment('center');
+    const heatColumns = ['x', 'podcast', 'blog'];
+    topics.forEach((topic, rowIndex) => {
+      const entry = topicCounts.get(normalizeTopic(topic)) || { x: 0, podcast: 0, blog: 0 };
+      const maxCount = Math.max(entry.x, entry.podcast, entry.blog);
+      heatColumns.forEach((source, columnIndex) => {
+        const count = entry[source] || 0;
+        const fill = count === 0 ? COLORS.heatLow : (count === maxCount ? COLORS.heatHigh : COLORS.heatMedium);
+        sheet.getRange(6 + rowIndex, 1 + columnIndex)
+          .setBackgroundColor(fill)
+          .setFontColor(fill)
+          .setHorizontalAlignment('center')
+          .setVerticalAlignment('middle');
+      });
+    });
 
     sheet.getRange('E7:G9').setValues([
-      ['80+', scoreBandFormula('80+'), 'High'],
-      ['50-79', scoreBandFormula('50-79'), 'Medium'],
-      ['<50', scoreBandFormula('<50'), 'Low']
+      ['80+', '=M3', '=M3'],
+      ['50-79', '=M4', '=M4'],
+      ['<50', '=M5', '=M5']
     ]);
     sheet.getRange('E7:G9').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange('E7:E9').setFontColor(COLORS.panelText).setFontWeight('bold');
+    [
+      { row: 6, fill: COLORS.green, countColor: '#166534' },
+      { row: 7, fill: COLORS.heatAccent, countColor: '#92400E' },
+      { row: 8, fill: COLORS.lowScore, countColor: '#991B1B' }
+    ].forEach(bar => {
+      sheet.getRange(bar.row, 5)
+        .setBackgroundColor(bar.fill)
+        .setFontColor(bar.fill)
+        .setHorizontalAlignment('center')
+        .setVerticalAlignment('middle');
+      sheet.getRange(bar.row, 6)
+        .setFontColor(bar.countColor)
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center');
+    });
 
     sheet.getRange('L1').setValue('helper');
     sheet.getRange('L2:M4').setValues([
@@ -994,8 +1017,8 @@ export function buildWorkbookRunScript({ rawRows, displayRows = [], runRecord, w
 
     applyAnalyticsConditionalFormatting(sheet);
     applyScoreConditionalFormatting(sheet, displayRows.length);
-    const chartInserted = chartsReset ? await insertDailyVolumeChart(sheet) : false;
-    if (!chartInserted) renderDailyVolumeFallback(sheet);
+    await insertDailyVolumeChart(sheet);
+    renderDailyVolumeFallback(sheet);
   }
 
   try {

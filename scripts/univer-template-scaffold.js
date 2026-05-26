@@ -75,9 +75,9 @@
     muted: '#475569',
     tableHeader: '#1F4E79',
     tableAlt: '#F8FBFF',
-    heatLow: '#F8FAFC',
-    heatMedium: '#BFDBFE',
-    heatHigh: '#2563EB',
+    heatLow: '#DBEAFE',
+    heatMedium: '#60A5FA',
+    heatHigh: '#1D4ED8',
     heatAccent: '#F59E0B'
   };
 
@@ -219,34 +219,7 @@
   }
 
   function applyAnalyticsConditionalFormatting(sheet) {
-    const numberValueType = univerAPI.Enum?.ConditionFormatValueTypeEnum?.num;
-    if (!numberValueType) return;
-    addConditionalFormattingRule(sheet, builder => {
-      if (typeof builder.setDataBar !== 'function' || typeof builder.setRanges !== 'function' || typeof builder.build !== 'function') return null;
-      return builder
-        .setDataBar({
-          min: { type: numberValueType, value: 0 },
-          max: { type: numberValueType, value: 100 },
-          positiveColor: COLORS.x,
-          nativeColor: COLORS.lowScore,
-          isGradient: true,
-          isShowValue: true
-        })
-        .setRanges([sheet.getRange('F7:F9').getRange()])
-        .build();
-    });
-
-    addConditionalFormattingRule(sheet, builder => {
-      if (typeof builder.setColorScale !== 'function' || typeof builder.setRanges !== 'function' || typeof builder.build !== 'function') return null;
-      return builder
-        .setColorScale([
-          { index: 0, color: COLORS.heatLow, value: { type: numberValueType, value: 0 } },
-          { index: 1, color: COLORS.heatMedium, value: { type: numberValueType, value: 2 } },
-          { index: 2, color: COLORS.heatHigh, value: { type: numberValueType, value: 5 } }
-        ])
-        .setRanges([sheet.getRange('B7:D9').getRange()])
-        .build();
-    });
+    return sheet;
   }
 
   function conditionalFormattingRuleCount(sheet) {
@@ -322,25 +295,44 @@
     sheet.getRange('A6:J6').setFontWeight('bold').setFontColor(COLORS.panelText).setFontSize(10);
 
     sheet.getRange('A7:D9').setValues([
-      ['AI agents', '=L17', '=M17', '=N17'],
-      ['Open models', '=L18', '=M18', '=N18'],
-      ['Research', '=L19', '=M19', '=N19']
+      ['AI agents', '=M17', '=N17', '=O17'],
+      ['Open models', '=M18', '=N18', '=O18'],
+      ['Research', '=M19', '=N19', '=O19']
     ]);
     sheet.getRange('B10:D10').setValues([['X', 'Podcast', 'Blog']]);
     sheet.getRange('A7:D10').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange('A7:A9').setFontColor(COLORS.panelText).setFontWeight('bold');
+    sheet.getRange('B10:D10').setFontColor(COLORS.muted).setFontWeight('bold').setHorizontalAlignment('center');
+    sheet.getRange('B7:D9').setFontColor(COLORS.heatLow).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.getRange('B7').setBackgroundColor(COLORS.heatHigh).setFontColor(COLORS.heatHigh);
+    sheet.getRange('C7').setBackgroundColor(COLORS.heatMedium).setFontColor(COLORS.heatMedium);
+    sheet.getRange('D7:D9').setBackgroundColor(COLORS.heatLow).setFontColor(COLORS.heatLow);
+    sheet.getRange('B8:C9').setBackgroundColor(COLORS.heatMedium).setFontColor(COLORS.heatMedium);
     sheet.getRange('E7:G9').setValues([
-      ['80+', '=M3', 'High'],
-      ['50-79', '=M4', 'Medium'],
-      ['<50', '=M5', 'Low']
+      ['80+', '=M3', '=M3'],
+      ['50-79', '=M4', '=M4'],
+      ['<50', '=M5', '=M5']
     ]);
     sheet.getRange('E7:G9').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange('E7:E9').setFontColor(COLORS.panelText).setFontWeight('bold');
+    [
+      { row: 6, fill: COLORS.green, countColor: '#166534' },
+      { row: 7, fill: COLORS.heatAccent, countColor: '#92400E' },
+      { row: 8, fill: COLORS.lowScore, countColor: '#991B1B' }
+    ].forEach(bar => {
+      sheet.getRange(bar.row, 5).setBackgroundColor(bar.fill).setFontColor(bar.fill).setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sheet.getRange(bar.row, 6).setFontColor(bar.countColor).setFontWeight('bold').setHorizontalAlignment('center');
+    });
     sheet.getRange('H7:J10').setValues([
-      ['Mon', '=M8', ''],
-      ['Tue', '=M9', ''],
-      ['Wed', '=M10', ''],
-      ['Thu-Sun', '=SUM(M11:M14)', '']
+      ['Mon', 'Tue', 'Wed'],
+      ['=M8', '=M9', '=M10'],
+      ['=M11', '=M12', '=SUM(M13:M14)'],
+      ['Thu', 'Fri', 'Sat/Sun']
     ]);
     sheet.getRange('H7:J10').setFontSize(10).setVerticalAlignment('middle');
+    sheet.getRange('H7:J7').setFontWeight('bold').setFontColor(COLORS.panelText).setHorizontalAlignment('center');
+    sheet.getRange('H10:J10').setFontWeight('bold').setFontColor(COLORS.panelText).setHorizontalAlignment('center');
+    sheet.getRange('H8:J9').setBackgroundColor(COLORS.x).setFontColor(COLORS.x).setHorizontalAlignment('center').setVerticalAlignment('middle');
 
     sheet.getRange('L1').setValue('helper');
     sheet.getRange('L2:M5').setValues([
