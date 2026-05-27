@@ -30,7 +30,7 @@ WhatsApp, etc.) with:
 The agent will ask you:
 - How often you want your digest (daily or weekly) and what time
 - What language you prefer
-- How you want it delivered (Telegram, email, or in-chat)
+- How you want it delivered (Telegram, Discord, email, or in-chat)
 
 No API keys needed — all content is fetched centrally.
 Your first digest arrives immediately after setup.
@@ -46,6 +46,19 @@ Your delivery preferences are configurable through conversation. Just tell your 
 
 The source list (builders, podcasts, blogs, and discovery feeds) is curated centrally and updates
 automatically — you always get the latest sources without doing anything.
+
+## Discord Delivery
+
+Discord delivery uses an Incoming Webhook attached to the target channel. You do not
+need to create a Discord App or Bot.
+
+The recommended setup is through your agent. Say "send my digest to Discord" or
+"also send this to Discord". The agent will walk you through creating a channel
+webhook, ask you to paste the webhook URL, store it locally in
+`~/.follow-builders/.env`, and update `~/.follow-builders/config.json`.
+
+For multi-channel delivery, the agent uses `delivery.targets`. For example, it can
+send the same digest to both Telegram and Discord.
 
 ## Customizing the Summaries
 
@@ -115,7 +128,7 @@ cd ~/.claude/skills/follow-builders/scripts && npm install
 
 ## Scheduled LLM Cron
 
-For non-persistent agents with Telegram or email delivery, use the LLM cron runner
+For non-persistent agents with configured non-stdout delivery, use the LLM cron runner
 instead of piping raw feed JSON directly to delivery:
 
 ```bash
@@ -183,7 +196,7 @@ See [examples/sample-digest.md](examples/sample-digest.md) for what the output l
 ## Privacy
 
 - No API keys are sent anywhere — all content is fetched centrally
-- If you use Telegram/email delivery, those keys are stored locally in `~/.follow-builders/.env`
+- If you use Telegram, Discord, or email delivery, those credentials are stored locally in `~/.follow-builders/.env`
 - The skill only reads public content (public blog posts, public YouTube videos, public X posts, and public discovery sources)
 - Your configuration, preferences, and reading history stay on your machine
 

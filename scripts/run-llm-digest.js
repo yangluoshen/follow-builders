@@ -261,7 +261,7 @@ Discovery workbook rules:
 Constraints:
 - Do not install packages, run npm install, run npm ci, edit repository files, or change user config.
 - Delivery is handled by the wrapper.
-- Do not run deliver.js, Telegram/email delivery, or any delivery command/API.
+- Do not run deliver.js, configured delivery, or any delivery command/API.
 - Only run prepare-digest.js, write the digest markdown file, write the workbook items JSON file, and return status.
 - If any required command fails, do not try to repair the environment. Reply with "Digest failed: <short reason>".
 
@@ -508,8 +508,15 @@ async function runWorkbookSideEffects({ config, digestPath, itemsJsonPath, logPa
   await runWorkbookUpdate({ config, digestPath, itemsJsonPath, logPath });
 }
 
+function deliveryUsesStdoutOnly(delivery = {}) {
+  if (Array.isArray(delivery.targets) && delivery.targets.length > 0) {
+    return delivery.targets.length === 1 && (delivery.targets[0].method || 'stdout') === 'stdout';
+  }
+  return (delivery.method || 'stdout') === 'stdout';
+}
+
 async function runDelivery({ config, digestPath, logPath }) {
-  if ((config.delivery?.method || 'stdout') === 'stdout') {
+  if (deliveryUsesStdoutOnly(config.delivery)) {
     console.log(await readFile(digestPath, 'utf-8'));
     return;
   }
@@ -651,7 +658,7 @@ async function main() {
     }
 
     await runDelivery({ config, digestPath, logPath });
-    if ((config.delivery?.method || 'stdout') === 'stdout') {
+    if (deliveryUsesStdoutOnly(config.delivery)) {
       return;
     }
 

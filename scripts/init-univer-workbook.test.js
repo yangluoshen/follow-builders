@@ -327,7 +327,7 @@ test('initializes workbook from code scaffold and saves public URL', async t => 
   assert.equal(config.univer.unitId, 'unit-test-1');
   assert.equal(config.univer.publicUrl, 'https://univer.ai/space/sheets/unit-test-1');
   assert.deepEqual((await readFile(calls, 'utf-8')).trim().split('\n'), [
-    `new ${workbookPath} --name Follow Builders`,
+    `new ${workbookPath}`,
     `run ${workbookPath} --file ${join(root, 'scripts', 'univer-template-scaffold.js')}`,
     `inspect workbook ${workbookPath}`,
     `inspect range ${workbookPath} --range raw-data!A1:T1`,
